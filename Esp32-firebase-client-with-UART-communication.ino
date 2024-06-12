@@ -12,6 +12,8 @@
 #include <FirebaseClient.h>
 
 #include <WiFiClientSecure.h>
+
+#include <Wire.h> //I2C
 //########################################################################################
 
 
@@ -21,46 +23,43 @@
 
 //########################################################################################
 //Global Variables//
-String API_KEY ="";
 
+//Global variables for connecting to the cloud database (stored in /project_info.txt)
+String API_KEY ="";
 String FIREBASE_PROJECT_ID = "";
 
+//Global variables for the firebase library
 WiFiClientSecure ssl_client;
-
-
 DefaultNetwork network; // initilize with boolean parameter to enable/disable network reconnection
-
 using AsyncClient = AsyncClientClass;
-
 AsyncClient aClient(ssl_client, getNetwork(network));
-
 Firestore::Documents Docs;
-
 AsyncResult aResult_no_callback;
+FirebaseApp app;
 
-//ssid and password of the access point
+//Global variables for the access point
 const char* ap_ssid = "ESP32_AP";
 const char* ap_password = "12345678";
+//selecting the port 80 for the server (standard http port)
+WebServer server(80);
 
-
-//for now global variables, then better save them crypted in eeprom or spiffs
+//Global varaibles for wifi and autentication (stored in /credentials.txt)
 String ssid = "";
 String wifi_password = "";
 String email ="";
 String account_password="";
 
+//Other global variables
 bool verified = false;
-
-FirebaseApp app;
-
-//selecting the port 80 for the server (standard http port)
-WebServer server(80);
-
 unsigned long dataMillis = 0;
-
 bool taskCompleted = false;
-
 bool first_time = true;
+
+//Global variables for the time
+// Set time zone (UTC+1 for Italy)
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 3600;    // UTC +1 (3600 seconds)
+const int   daylightOffset_sec = 3600; // Ora legale
 //###################################################################################################
 
 
@@ -500,6 +499,10 @@ void setup() {
     }
     else 
     {
+      // Configure the NTP client
+      configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+
+
       setupFirestore();
     }
   }
@@ -522,14 +525,6 @@ void setup() {
 void loop(){
 
   if(WiFi.status() == WL_CONNECTED){
-  // The async task handler should run inside the main loop
-    // without blocking delay or bypassing with millis code blocks.
-
-    // The JWT token processor required for ServiceAuth and CustomAuth authentications.
-    // JWT is a static object of JWTClass and it's not thread safe.
-    // In multi-threaded operations (multi-FirebaseApp), you have to define JWTClass for each FirebaseApp,
-    // and set it to the FirebaseApp via FirebaseApp::setJWTProcessor(<JWTClass>), before calling initializeApp.
-    //JWT.loop(app.getAuth());
 
     authHandler();
 
