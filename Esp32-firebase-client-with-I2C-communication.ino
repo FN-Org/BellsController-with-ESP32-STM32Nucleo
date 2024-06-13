@@ -2,18 +2,26 @@
 //includes//
 #include <Arduino.h>
 
+//SPIFFS
 #include <SPIFFS.h>
-#include <FS.h> //SPIFFS
+#include <FS.h>
 
-
+//Wifi
 #include <WiFi.h>
+//Wifi udp for ntp
+#include <WiFiUdp.h>
+//Web server per l'access point
 #include <WebServer.h>
-
+//Firebase client
 #include <FirebaseClient.h>
 
 #include <WiFiClientSecure.h>
 
-#include <Wire.h> //I2C
+//Managing time values
+#include "time.h"
+
+//JSON
+#include <ArduinoJson.h>
 //########################################################################################
 
 
@@ -60,6 +68,12 @@ bool first_time = true;
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 3600;    // UTC +1 (3600 seconds)
 const int   daylightOffset_sec = 3600; // Ora legale
+
+
+//JSON
+#define JSON_BUFFER_SIZE 256 
+
+unsigned long last_time_sent = 0;
 //###################################################################################################
 
 
@@ -340,10 +354,9 @@ bool verifyUser(const String &apiKey, const String &email, const String &passwor
 }
 
 /*
-* @brief Function to handle the authentication
+* @brief Function to handle the firebase authentication
 * 
 */
-
 void authHandler()
 {
     // Blocking authentication handler with timeout
@@ -465,6 +478,64 @@ bool readProjectInformations(){
     return false;
   }
 }
+
+/*
+*@brief Function to setup the ntp connection
+*/
+void setupNTP()
+{
+  // Configure the NTP client
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+
+}
+
+void setupUART()
+{
+  Serial2.begin(115200);
+}
+
+void currentTimeSending()
+{
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Error when trying to get the time.");
+    return;
+  }
+
+  String JSON_time = currentTimetoJSOn(&timeinfo);
+  Serial.println("Requested time, sending:"+ JSON_time);
+
+  Serial2.println(JSON_time);
+ 
+}
+/*
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Errore nel recuperare l'ora corrente");
+    return;
+  }
+  Serial.println(&timeinfo, "Ora corrente: %A, %B %d %Y %H:%M:%S");
+}
+*/
+
+String currentTimetoJSOn(struct tm* timeData)
+{
+  StaticJsonDocument<JSON_BUFFER_SIZE> jsonBuffer;
+  jsonBuffer["s"] = timeData->tm_sec;
+  jsonBuffer["mi"] = timeData->tm_min;
+  jsonBuffer["h"] = timeData->tm_hour;
+  jsonBuffer["md"] = timeData->tm_mday;
+  jsonBuffer["mo"] = timeData->tm_mon;
+  jsonBuffer["y"] = timeData->tm_year;
+  /*jsonBuffer["tm_wday"] = timeData->tm_wday;
+  jsonBuffer["tm_yday"] = timeData->tm_yday;*/
+  jsonBuffer["isdst"] = timeData->tm_isdst;
+
+  String output;
+  serializeJson(jsonBuffer,output);
+
+  return output;
+}
 //#########################################################################################################
 
 
@@ -499,11 +570,10 @@ void setup() {
     }
     else 
     {
-      // Configure the NTP client
-      configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-
-
+      setupNTP();
+      setupUART();
       setupFirestore();
+
     }
   }
   else 
@@ -564,6 +634,12 @@ void loop(){
             else
                 printError(aClient.lastError().code(), aClient.lastError().message());
         }
+    }
+
+    if (millis() - last_time_sent > 5000)
+    {
+      currentTimeSending();
+      last_time_sent = millis();
     }
   }
   else server.handleClient();
