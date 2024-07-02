@@ -47,6 +47,9 @@ Firestore::Documents Docs;
 AsyncResult aResult_no_callback;
 FirebaseApp app;
 
+FirebaseJson jsonParser;
+FirebaseJsonData jsonData;
+
 // Global variables for the access point
 const char* ap_ssid = "ESP32_AP";
 const char* ap_password = "12345678";
@@ -376,6 +379,7 @@ void createFirebaseDocument() {
     Values::IntegerValue bellsV(5);
     Values::IntegerValue melodiesV(12);
     Values::StringValue nameV("");
+    Values::StringValue defaultV("");
 
     // Obtain the current time from NTP server
     struct tm timeinfo;
@@ -393,10 +397,67 @@ void createFirebaseDocument() {
     Values::TimestampValue timeV(timestamp);
 
     Document<Values::Value> doc("#bells", Values::Value(bellsV));
-    doc.add("#melodies", Values::Value(melodiesV)).add("name", Values::Value(nameV)).add("time", Values::Value(timeV));
+    doc.add("#melodies", Values::Value(melodiesV)).add("name", Values::Value(nameV)).add("time", Values::Value(timeV)).add("id",Values::Value(defaultV));
 
-    Serial.println("Create document... ");
-    Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask(), doc, asyncCB, "M2DLifxlStXbUHLxZDbAeLdKZUA2");
+    while(!taskCompleted) {
+      authHandler();
+      app.loop();
+      Docs.loop();
+
+      if(app.isInitialized() && app.ready()) {
+        taskCompleted = true;
+
+          Serial.println("Create document... ");
+          String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
+
+          // Parsing the JSON string
+          jsonParser.setJsonData(payload);
+
+          // Extracting the 'name' field
+          if (jsonParser.get(jsonData, "name")) {
+            String nameValue = jsonData.stringValue;
+            Serial.print("Name: ");
+            Serial.println(nameValue);
+
+            // Extracting the document ID from the 'name' value
+            int lastSlashIndex = nameValue.lastIndexOf('/');
+            if (lastSlashIndex != -1) {
+              String documentId = nameValue.substring(lastSlashIndex + 1);
+              Serial.print("Document ID: ");
+              Serial.println(documentId);
+
+              File file = SPIFFS.open("/systeminfo.txt", "w");
+              if (!file) {
+                Serial.println("Failed to open file for reading");
+                return;
+              }
+
+              file.print(documentId);
+              // file.print()
+              // Metti anche #campane, #melodie e uid degli utenti
+              file.close();
+
+              Values::StringValue idV(documentId);
+              Document<Values::Value> update("id", Values::Value(idV));
+
+              PatchDocumentOptions patchOptions(DocumentMask("id"), DocumentMask(), Precondition());
+
+              // You can set the content of doc object directly with doc.setContent("your content")
+              Serial.println(doc_path + "/" + documentId);
+              String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path + "/" + documentId, patchOptions, update);
+
+              if (aClient.lastError().code() == 0)
+                Serial.println(payload);
+              else
+                printError(aClient.lastError().code(), aClient.lastError().message());
+            } else {
+              Serial.println("Errore: '/' non trovato nel campo 'name'");
+            }
+          } else {
+            Serial.println("Errore: campo 'name' non trovato nel JSON");
+          }
+      }
+    }
 }
 
 void asyncCB(AsyncResult &aResult)
@@ -625,10 +686,7 @@ void setup() {
     {
       setupNTP(); // Network Time Protocol
       setupUART(); // Universal Asynchronous Receiver-Transmitter (seriale)
-      if (!setupFirestore()) {
-        Serial.println("Remember to sign up first and try again");
-      }
-      createFirebaseDocument();
+      setupFirestore();
     }
   }
   else 
@@ -653,7 +711,7 @@ void loop(){
 
     authHandler();
 
-    app . loop();
+    app.loop();
     Docs.loop();
 
     if (first_time)
@@ -661,6 +719,25 @@ void loop(){
       Serial.println("User verified:");
       Serial.println(verified);
       first_time = !first_time;
+
+      File file = SPIFFS.open("/systeminfo.txt", "w");
+      if (!file) {
+          Serial.println("Failed to open file for writing");
+          return;
+      }
+      String systemId = file.readStringUntil('\n');
+
+      String documentPath = "systems";
+
+      Serial.println("Get a document... ");
+
+      String payload = Docs.get(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath + "/" + systemId, GetDocumentOptions(DocumentMask()));
+
+      if (aClient.lastError().code() == 0)
+        Serial.println(payload);
+      else
+        createFirebaseDocument();
+        // printError(aClient.lastError().code(), aClient.lastError().message());
     }
     
     if (app.ready() && (millis() - dataMillis > 6000 || dataMillis == 0))
