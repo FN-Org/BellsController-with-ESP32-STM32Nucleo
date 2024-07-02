@@ -6,21 +6,23 @@
 #include <SPIFFS.h>
 #include <FS.h>
 
-//Wifi
+// Wifi
 #include <WiFi.h>
-//Wifi udp for ntp
+// Wifi udp for ntp
 #include <WiFiUdp.h>
-//Web server per l'access point
+// Web server per l'access point
 #include <WebServer.h>
-//Firebase client
+// Firebase client
 #include <FirebaseClient.h>
+
+#include <FirebaseJson.h>
 
 #include <WiFiClientSecure.h>
 
-//Managing time values
+// Managing time values
 #include "time.h"
 
-//JSON
+// JSON
 #include <ArduinoJson.h>
 //########################################################################################
 
@@ -30,47 +32,47 @@
 
 
 //########################################################################################
-//Global Variables//
+// Global Variables//
 
-//Global variables for connecting to the cloud database (stored in /project_info.txt)
+// Global variables for connecting to the cloud database (stored in /project_info.txt)
 String API_KEY ="";
 String FIREBASE_PROJECT_ID = "";
 
-//Global variables for the firebase library
+// Global variables for the firebase library
 WiFiClientSecure ssl_client;
 DefaultNetwork network; // initilize with boolean parameter to enable/disable network reconnection
 using AsyncClient = AsyncClientClass;
 AsyncClient aClient(ssl_client, getNetwork(network));
-Firestore::Documents Docs;
+Firestore::Documents Docs; 
 AsyncResult aResult_no_callback;
 FirebaseApp app;
 
-//Global variables for the access point
+// Global variables for the access point
 const char* ap_ssid = "ESP32_AP";
 const char* ap_password = "12345678";
-//selecting the port 80 for the server (standard http port)
+// Selecting the port 80 for the server (standard http port)
 WebServer server(80);
 
-//Global varaibles for wifi and autentication (stored in /credentials.txt)
+// Global varaibles for wifi and autentication (stored in /credentials.txt)
 String ssid = "";
 String wifi_password = "";
 String email ="";
 String account_password="";
 
-//Other global variables
+// Other global variables
 bool verified = false;
 unsigned long dataMillis = 0;
 bool taskCompleted = false;
 bool first_time = true;
 
-//Global variables for the time
+// Global variables for the time
 // Set time zone (UTC+1 for Italy)
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 3600;    // UTC +1 (3600 seconds)
 const int   daylightOffset_sec = 3600; // Ora legale
 
 
-//JSON
+// JSON
 #define JSON_BUFFER_SIZE 256 
 
 unsigned long last_time_sent = 0;
@@ -91,17 +93,27 @@ unsigned long last_time_sent = 0;
 * 
 */
 void handleRoot() {
-  String htmlForm = "<form action=\"/get\" method=\"post\">"
-                  "<label for=\"ssid\">SSID:</label><br>"
-                  "<input type=\"text\" id=\"ssid\" name=\"ssid\"><br>"
-                  "<label for=\"wifi_password\">wifi_password:</label><br>"
-                  "<input type=\"text\" id=\"wifi_password\" name=\"wifi_password\"><br>"
-                  "<label for=\"email\">email:</label><br>"
-                  "<input type=\"text\" id=\"email\" name=\"email\"><br>"
-                  "<label for=\"account_password\">account password:</label><br>"
-                  "<input type=\"text\" id=\"account_password\" name=\"account_password\"><br><br>"
-                  "<input type=\"submit\" value=\"Submit\">"
-                  "</form>";
+  String htmlForm = "<!DOCTYPE html><html><head><style>"
+                    "body {background-color: #007BFF; font-family: Arial, sans-serif;}"
+                    ".container {background-color: white; padding: 20px; margin: auto; width: 50%; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);}"
+                    "input[type=text], input[type=password] {width: 100%; padding: 12px; margin: 8px 0; display: inline-block; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;}"
+                    "input[type=submit] {width: 100%; background-color: #4CAF50; color: white; padding: 14px 20px; margin: 8px 0; border: none; border-radius: 4px; cursor: pointer;}"
+                    "input[type=submit]:hover {background-color: #45a049;}"
+                    "label {font-weight: bold;}"
+                    "</style></head><body>"
+                    "<div class=\"container\">"
+                    "<form action=\"/get\" method=\"post\">"
+                    "<label for=\"ssid\">SSID:</label><br>"
+                    "<input type=\"text\" id=\"ssid\" name=\"ssid\"><br>"
+                    "<label for=\"wifi_password\">WiFi Password:</label><br>"
+                    "<input type=\"text\" id=\"wifi_password\" name=\"wifi_password\"><br>"
+                    "<label for=\"email\">Email:</label><br>"
+                    "<input type=\"text\" id=\"email\" name=\"email\"><br>"
+                    "<label for=\"account_password\">Account Password:</label><br>"
+                    "<input type=\"text\" id=\"account_password\" name=\"account_password\"><br><br>"
+                    "<input type=\"submit\" value=\"Submit\">"
+                    "</form></div>"
+                    "</body></html>";
   server.send(200, "text/html", htmlForm);
 }
 
@@ -210,7 +222,6 @@ void startAccessPoint()
 
 }
 
-
 /*
 * @brief Function to handle the connection to the wifi
 * @return true if the connection went right, false otherwise
@@ -264,12 +275,11 @@ bool connectToWifi()
   }
 }
 
-
 /*
 * @brief Function to handle the set up of the connection to the firestore cloud database service
 * 
 */
-void setupFirestore()
+bool setupFirestore()
 {
   Firebase.printf("Firebase Client v%s\n", FIREBASE_CLIENT_VERSION);
   UserAuth user_auth(API_KEY,email,account_password);
@@ -291,6 +301,7 @@ void setupFirestore()
 
   verified = verifyUser(API_KEY,email,account_password);
 
+  return verified;
 }
 
 
@@ -351,6 +362,49 @@ bool verifyUser(const String &apiKey, const String &email, const String &passwor
     }
 
     return ret;
+}
+
+/*
+*
+*
+*
+*/
+void createFirebaseDocument() {
+
+    String doc_path = "systems";
+
+    Values::IntegerValue bellsV(5);
+    Values::IntegerValue melodiesV(12);
+    Values::StringValue nameV("");
+
+    // Obtain the current time from NTP server
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        Serial.println("Failed to obtain time");
+        return;
+    }
+
+    // Format the timestamp
+    char timestamp[21];
+    sprintf(timestamp, "%04d-%02d-%02dT%02d:%02d:%02dZ", 
+            timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+            timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+
+    Values::TimestampValue timeV(timestamp);
+
+    Document<Values::Value> doc("#bells", Values::Value(bellsV));
+    doc.add("#melodies", Values::Value(melodiesV)).add("name", Values::Value(nameV)).add("time", Values::Value(timeV));
+
+    Serial.println("Create document... ");
+    Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask(), doc, asyncCB, "M2DLifxlStXbUHLxZDbAeLdKZUA2");
+}
+
+void asyncCB(AsyncResult &aResult)
+{
+    // WARNING!
+    // Do not put your codes inside the callback and printResult.
+
+    printResult(aResult);
 }
 
 /*
@@ -486,7 +540,6 @@ void setupNTP()
 {
   // Configure the NTP client
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-
 }
 
 void setupUART()
@@ -570,10 +623,12 @@ void setup() {
     }
     else 
     {
-      setupNTP();
-      setupUART();
-      setupFirestore();
-
+      setupNTP(); // Network Time Protocol
+      setupUART(); // Universal Asynchronous Receiver-Transmitter (seriale)
+      if (!setupFirestore()) {
+        Serial.println("Remember to sign up first and try again");
+      }
+      createFirebaseDocument();
     }
   }
   else 
@@ -598,6 +653,7 @@ void loop(){
 
     authHandler();
 
+    app . loop();
     Docs.loop();
 
     if (first_time)
@@ -607,33 +663,29 @@ void loop(){
       first_time = !first_time;
     }
     
-    if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0))
+    if (app.ready() && (millis() - dataMillis > 6000 || dataMillis == 0))
     {
         dataMillis = millis();
 
-        if (!taskCompleted)
-        {
-            taskCompleted = true;
-            // Should run the Create_Documents.ino prior to test this example to create the documents in the collection Id at a0/b0/c0
+        // Should run the Create_Documents.ino prior to test this example to create the documents in the collection Id at a0/b0/c0
 
-            // a0 is the collection id, b0 is the document id in collection a0 and c0 is the collection id id in the document b0.
-            String collectionId = "test";
+        // a0 is the collection id, b0 is the document id in collection a0 and c0 is the collection id id in the document b0.
+        String collectionId = "systems/KkEsJ6nVzUb4SSZhLANG/events";
 
-            // If the collection Id path contains space e.g. "a b/c d/e f"
-            // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
+        // If the collection Id path contains space e.g. "a b/c d/e f"
+        // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
 
-            Serial.println("List the documents in a collection... ");
+        Serial.println("List the documents in a collection... ");
 
-            ListDocumentsOptions listDocsOptions;
-            listDocsOptions.pageSize(100);
+        ListDocumentsOptions listDocsOptions;
+        listDocsOptions.pageSize(100);
 
-            String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
+        String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
 
-            if (aClient.lastError().code() == 0)
-                Serial.println(payload);
-            else
-                printError(aClient.lastError().code(), aClient.lastError().message());
-        }
+        if (aClient.lastError().code() == 0)
+            Serial.println(payload);
+        else
+            printError(aClient.lastError().code(), aClient.lastError().message());
     }
 
     if (millis() - last_time_sent > 5000)
