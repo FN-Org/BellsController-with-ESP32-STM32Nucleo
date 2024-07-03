@@ -14,7 +14,7 @@
 #include <WebServer.h>
 // Firebase client
 #include <FirebaseClient.h>
-
+// Firebase json
 #include <FirebaseJson.h>
 
 #include <WiFiClientSecure.h>
@@ -63,8 +63,11 @@ String wifi_password = "";
 String email = "";
 String account_password = "";
 
-String user_uid = "";
-String sys_id = "";
+// Global variables for system information and user information (stored in /systeminfo.txt)
+String systemId = "";
+int bellsNum = 0;
+int melodiesNum = 0;
+String userUid = "";
 
 // Other global variables
 bool verified = false;
@@ -366,13 +369,12 @@ bool verifyUser(const String& apiKey, const String& email, const String& passwor
 *
 */
 void createFirebaseDocument() {
-
-  String doc_path = "systems";
+    String doc_path = "systems";
 
   Values::IntegerValue bellsV(5);
   Values::IntegerValue melodiesV(12);
   Values::StringValue nameV("");
-  Values::StringValue defaultV(sys_id);
+  Values::StringValue defaultV(systemId);
 
   // Obtain the current time from NTP server
   struct tm timeinfo;
@@ -396,7 +398,7 @@ void createFirebaseDocument() {
   Serial.println("Create document... ");
   String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
 
-  if (sys_id.isEmpty()) {
+  if (systemId.isEmpty()) {
     // Parsing the JSON string
     jsonParser.setJsonData(payload);
 
@@ -409,9 +411,9 @@ void createFirebaseDocument() {
       // Extracting the document ID from the 'name' value
       int lastSlashIndex = nameValue.lastIndexOf('/');
       if (lastSlashIndex != -1) {
-        String sys_id = nameValue.substring(lastSlashIndex + 1);
+        systemId = nameValue.substring(lastSlashIndex + 1);
         Serial.print("Document ID: ");
-        Serial.println(sys_id);
+        Serial.println(systemId);
 
         File file = SPIFFS.open("/systeminfo.txt", "w");
         if (!file) {
@@ -419,19 +421,19 @@ void createFirebaseDocument() {
           return;
         }
 
-        file.print(sys_id);
+        file.print(systemId);
         // file.print()
         // Metti anche #campane, #melodie e uid degli utenti
         file.close();
 
-        Values::StringValue idV(sys_id);
+        Values::StringValue idV(systemId);
         Document<Values::Value> update("id", Values::Value(idV));
 
         PatchDocumentOptions patchOptions(DocumentMask("id"), DocumentMask(), Precondition());
 
         // You can set the content of doc object directly with doc.setContent("your content")
-        Serial.println(doc_path + "/" + sys_id);
-        String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path + "/" + sys_id, patchOptions, update);
+        Serial.println(doc_path + "/" + systemId);
+        String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path + "/" + systemId, patchOptions, update);
 
         if (aClient.lastError().code() == 0)
           Serial.println(payload);
@@ -620,8 +622,9 @@ String currentTimetoJSOn(struct tm* timeData) {
   return output;
 }
 
-bool checkDocumentExists() {
-  String documentPath = "systems/" + sys_id;
+bool checkDocumentExists()
+{
+    String documentPath = "systems/" + systemId;
 
   Serial.println("Checking document... ");
   String payload = Docs.get(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath, GetDocumentOptions(DocumentMask("id")));
@@ -636,24 +639,51 @@ bool checkDocumentExists() {
   }
 }
 
+bool isLinkedUser() {
+    Serial.println("Get the linker document");
+    String documentPath = "users/" + userUid + "/systems/" + systemId;
+    String payload = Docs.get(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath, GetDocumentOptions(DocumentMask("id")));
+
+    if (aClient.lastError().code() == 0) {
+        // Parsing the JSON string
+        jsonParser.setJsonData(payload);
+
+        // Check if the document contains the system ID
+        if (jsonParser.get(jsonData, "id") && jsonData.stringValue == systemId) {
+            Serial.println("User is linked to the system.");
+            return true;
+        } else {
+            Serial.println("User is not linked to the system.");
+            return false;
+        }
+    } else {
+        printError(aClient.lastError().code(), aClient.lastError().message());
+        return false;
+    }
+}
+
+
 void linkUser() {
-  String doc_path = "users/" + user_uid + "/systems/" + sys_id;
+    Serial.println("UID = " + userUid);
+    String doc_path = "users/" + userUid + "/systems";
 
   Values::StringValue nameV("");
-  Values::StringValue idV(sys_id);
+  Values::StringValue idV(systemId);
   Values::StringValue locationV("Genova");
 
-  Document<Values::Value> doc("location", Values::Value(locationV));
-  doc.add("ids", Values::Value(idV)).add("name", Values::Value(nameV));
+    Document<Values::Value> doc("location", Values::Value(locationV));
+    doc.add("id", Values::Value(idV)).add("name", Values::Value(nameV));
 
-  Serial.println("Create link system & user document... ");
-  String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask(), doc);
-  if (aClient.lastError().code() == 0) {
-    Serial.println("Document exists: " + payload);
-  } else {
-    Serial.println("Document does not exist or error occurred");
-    printError(aClient.lastError().code(), aClient.lastError().message());
-  }
+    Serial.println("Create link system & user document... ");
+          String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, systemId, DocumentMask("name"), doc);
+}
+
+int setNumBells() {
+  return 0;
+}
+
+int setNumMelodies() {
+  return 0;
 }
 //#########################################################################################################
 
@@ -691,6 +721,9 @@ void setup() {
   } else {
     ReceiveandSaveProjectInformations();
   }
+  bellsNum = setNumBells();
+  melodiesNum = setNumMelodies();
+  // Poi queste bisogna metterle nello spiffs
 }
 //#########################################################################################################################
 
@@ -715,7 +748,7 @@ void loop() {
       Serial.println(verified);
       first_time = !first_time;
 
-      user_uid = app.getUid().c_str();
+      userUid = app.getUid();
 
 
       File file = SPIFFS.open("/systeminfo.txt", "r");
@@ -723,19 +756,38 @@ void loop() {
         Serial.println("Failed to open file for reading");
         return;
       }
-      sys_id = file.readStringUntil('\n');
-
-      String documentPath = "systems";
-
-      Serial.println("Get a document... ");
-      Serial.println("With ID = " + sys_id);
-
-
-      if (sys_id.isEmpty() || !checkDocumentExists()) {
+      systemId = file.readStringUntil('\n');
+      if (systemId.isEmpty() || !checkDocumentExists()) {
         createFirebaseDocument();
       }
+      if (!isLinkedUser()) {
+        linkUser();
+      }
+    }
+    
+    if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0))
+    {
+        dataMillis = millis();
 
-      linkUser();
+        // Should run the Create_Documents.ino prior to test this example to create the documents in the collection Id at a0/b0/c0
+
+        // a0 is the collection id, b0 is the document id in collection a0 and c0 is the collection id id in the document b0.
+        String collectionId = "systems/KkEsJ6nVzUb4SSZhLANG/events";
+
+        // If the collection Id path contains space e.g. "a b/c d/e f"
+        // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
+
+        Serial.println("List the documents in a collection... ");
+
+        ListDocumentsOptions listDocsOptions;
+        listDocsOptions.pageSize(100);
+
+        String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
+
+        if (aClient.lastError().code() == 0)
+            Serial.println(payload);
+        else
+            printError(aClient.lastError().code(), aClient.lastError().message());
     }
 
     if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0)) {
