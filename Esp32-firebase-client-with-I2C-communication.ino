@@ -53,6 +53,7 @@ FirebaseJsonData jsonData;
 // Global variables for the access point
 const char* ap_ssid = "ESP32_AP";
 const char* ap_password = "12345678";
+
 // Selecting the port 80 for the server (standard http port)
 WebServer server(80);
 
@@ -61,6 +62,8 @@ String ssid = "";
 String wifi_password = "";
 String email ="";
 String account_password="";
+
+String user_uid = "";
 
 // Other global variables
 bool verified = false;
@@ -144,7 +147,7 @@ void saveCredentials(const String& ssid, const String& wifi_password, const Stri
 * 
 */
 void readCredentials() {
-   Serial.println("Reading credentials...");
+    Serial.println("Reading credentials...");
     File file = SPIFFS.open("/credentials.txt", "r");
     if (!file) {
         Serial.println("Failed to open file for reading");
@@ -238,7 +241,7 @@ bool connectToWifi()
   // To set auto connect off, use the following function
   //    WiFi.setAutoReconnect(false);
 
-  // Will try for about 10 seconds (20x 500ms)
+  // Will try for about 10 seconds (20 x 500ms)
   int tryDelay = 500;
   int numberOfTries = 20;
 
@@ -372,14 +375,14 @@ bool verifyUser(const String &apiKey, const String &email, const String &passwor
 *
 *
 */
-void createFirebaseDocument() {
+void createFirebaseDocument(const String &systemId) {
 
     String doc_path = "systems";
 
     Values::IntegerValue bellsV(5);
     Values::IntegerValue melodiesV(12);
     Values::StringValue nameV("");
-    Values::StringValue defaultV("");
+    Values::StringValue defaultV(systemId);
 
     // Obtain the current time from NTP server
     struct tm timeinfo;
@@ -410,27 +413,28 @@ void createFirebaseDocument() {
           Serial.println("Create document... ");
           String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
 
-          // Parsing the JSON string
-          jsonParser.setJsonData(payload);
+          if(systemId.isEmpty()) {
+            // Parsing the JSON string
+            jsonParser.setJsonData(payload);
 
-          // Extracting the 'name' field
-          if (jsonParser.get(jsonData, "name")) {
-            String nameValue = jsonData.stringValue;
-            Serial.print("Name: ");
-            Serial.println(nameValue);
+            // Extracting the 'name' field
+            if (jsonParser.get(jsonData, "name")) {
+              String nameValue = jsonData.stringValue;
+              Serial.print("Name: ");
+              Serial.println(nameValue);
 
-            // Extracting the document ID from the 'name' value
-            int lastSlashIndex = nameValue.lastIndexOf('/');
-            if (lastSlashIndex != -1) {
-              String documentId = nameValue.substring(lastSlashIndex + 1);
-              Serial.print("Document ID: ");
-              Serial.println(documentId);
+              // Extracting the document ID from the 'name' value
+              int lastSlashIndex = nameValue.lastIndexOf('/');
+              if (lastSlashIndex != -1) {
+                String documentId = nameValue.substring(lastSlashIndex + 1);
+                Serial.print("Document ID: ");
+                Serial.println(documentId);
 
-              File file = SPIFFS.open("/systeminfo.txt", "w");
-              if (!file) {
-                Serial.println("Failed to open file for reading");
-                return;
-              }
+                File file = SPIFFS.open("/systeminfo.txt", "w");
+                if (!file) {
+                  Serial.println("Failed to open file for reading");
+                  return;
+                }
 
               file.print(documentId);
               // file.print()
@@ -450,12 +454,13 @@ void createFirebaseDocument() {
                 Serial.println(payload);
               else
                 printError(aClient.lastError().code(), aClient.lastError().message());
-            } else {
-              Serial.println("Errore: '/' non trovato nel campo 'name'");
+              } else {
+                Serial.println("Errore: '/' non trovato nel campo 'name'");
+              }
             }
-          } else {
-            Serial.println("Errore: campo 'name' non trovato nel JSON");
           }
+      } else {
+            Serial.println("Errore: campo 'name' non trovato nel JSON");
       }
     }
 }
@@ -464,7 +469,6 @@ void asyncCB(AsyncResult &aResult)
 {
     // WARNING!
     // Do not put your codes inside the callback and printResult.
-
     printResult(aResult);
 }
 
@@ -525,7 +529,8 @@ void printError(int code, const String &msg)
 /*
 * @brief Function to receive and save the project informations
 */
-void ReceiveandSaveProjectInformations(){
+void ReceiveandSaveProjectInformations() {
+  // Read the API KEY from serial
   Serial.print("Enter API_KEY: ");
   while (API_KEY == "") {
     if (Serial.available()) {
@@ -533,8 +538,9 @@ void ReceiveandSaveProjectInformations(){
       ssid.trim();
     }
   }
-  Serial.print("API_KEY= "+ API_KEY);
+  Serial.print("API_KEY = "+ API_KEY + "\n");
   
+  // Read the Firebase PROJECT ID from serial
   Serial.print("Enter FIREBASE_PROJECT_ID: ");
   while (FIREBASE_PROJECT_ID == "") {
     if (Serial.available()) {
@@ -544,18 +550,18 @@ void ReceiveandSaveProjectInformations(){
   }
   Serial.print("FIREBASE_PROJECT_ID= "+ FIREBASE_PROJECT_ID);
 
+  // Save the information read in the SPIFFS
   File file = SPIFFS.open("/project_info.txt", "w");
   if (!file) {
     Serial.println("Failed to open project_info.txt for writing");
     return;
   }
-
   file.println(API_KEY);
   file.println(FIREBASE_PROJECT_ID);
   file.close();
 
+  // Reboot the ESP
   Serial.println("Project info saved successfully, reboot...");
-
   ESP.restart();  
 }
 
@@ -563,13 +569,15 @@ void ReceiveandSaveProjectInformations(){
 * @brief Function to read the project informations from file
 * @return true if the informations are read correctly, false otherwise
 */
-bool readProjectInformations(){
+bool readProjectInformations() {
+  // Read project information from SPIFFS
   if (SPIFFS.exists("/project_info.txt")) {
     File file = SPIFFS.open("/project_info.txt", "r");
     if (!file) {
       Serial.println("Failed to open file for reading");
       return false;
     }
+
     API_KEY = file.readStringUntil('\n');
     API_KEY.trim();
     if (API_KEY == "") {
@@ -650,6 +658,40 @@ String currentTimetoJSOn(struct tm* timeData)
 
   return output;
 }
+
+bool checkDocumentExists(const String &systemID)
+{
+    String documentPath = "systems/" + systemID;
+
+    Serial.println("Checking document... ");
+    String payload = Docs.get(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath, GetDocumentOptions(DocumentMask("id")));
+
+    if (aClient.lastError().code() == 0)
+    {
+        Serial.println("Document exists: " + payload);
+        return true;
+    }
+    else
+    {
+        Serial.println("Document does not exist or error occurred");
+        printError(aClient.lastError().code(), aClient.lastError().message());
+        return false;
+    }
+}
+
+void linkUser(const String &systemId) {
+    String doc_path = "users/" + user_uid + "/systems";
+
+    Values::StringValue nameV("");
+    Values::StringValue idV(systemId);
+    Values::StringValue locationV("");
+
+    Document<Values::Value> doc("location", Values::Value(locationV));
+    doc.add("ids", Values::Value(idV)).add("name", Values::Value(nameV));
+
+    Serial.println("Create link system & user document... ");
+          String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
+}
 //#########################################################################################################
 
 
@@ -675,7 +717,6 @@ void setup() {
   WiFi.disconnect(true); // This line will clear any previous WiFi configurations
   delay(1000);
 
-
   if(readProjectInformations())
   {
     if(!connectToWifi())
@@ -693,8 +734,6 @@ void setup() {
   {
     ReceiveandSaveProjectInformations();
   }
-
-  
 }
 //#########################################################################################################################
 
@@ -720,7 +759,7 @@ void loop(){
       Serial.println(verified);
       first_time = !first_time;
 
-      File file = SPIFFS.open("/systeminfo.txt", "w");
+      File file = SPIFFS.open("/systeminfo.txt", "r");
       if (!file) {
           Serial.println("Failed to open file for writing");
           return;
@@ -730,17 +769,16 @@ void loop(){
       String documentPath = "systems";
 
       Serial.println("Get a document... ");
+      Serial.println("With ID = " + systemId);
 
-      String payload = Docs.get(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath + "/" + systemId, GetDocumentOptions(DocumentMask()));
+      if (systemId.isEmpty() || !checkDocumentExists(systemId)) {
+        createFirebaseDocument(systemId);
+      }
 
-      if (aClient.lastError().code() == 0)
-        Serial.println(payload);
-      else
-        createFirebaseDocument();
-        // printError(aClient.lastError().code(), aClient.lastError().message());
+      linkUser(systemId);
     }
     
-    if (app.ready() && (millis() - dataMillis > 6000 || dataMillis == 0))
+    if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0))
     {
         dataMillis = millis();
 
