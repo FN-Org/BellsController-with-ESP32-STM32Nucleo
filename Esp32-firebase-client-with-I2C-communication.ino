@@ -74,6 +74,7 @@ bool verified = false;
 unsigned long dataMillis = 0;
 bool taskCompleted = false;
 bool first_time = true;
+bool first_start = false;
 
 // Global variables for the time
 // Set time zone (UTC+1 for Italy)
@@ -363,91 +364,6 @@ bool verifyUser(const String& apiKey, const String& email, const String& passwor
   return ret;
 }
 
-/*
-*
-*
-*
-*/
-void createFirebaseDocument() {
-    String doc_path = "systems";
-
-  Values::IntegerValue bellsV(5);
-  Values::IntegerValue melodiesV(12);
-  Values::StringValue nameV("");
-  Values::StringValue defaultV(systemId);
-
-  // Obtain the current time from NTP server
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
-    Serial.println("Failed to obtain time");
-    return;
-  }
-
-  // Format the timestamp
-  char timestamp[21];
-  sprintf(timestamp, "%04d-%02d-%02dT%02d:%02d:%02dZ",
-          timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-          timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-
-  Values::TimestampValue timeV(timestamp);
-
-  Document<Values::Value> doc("#bells", Values::Value(bellsV));
-  doc.add("#melodies", Values::Value(melodiesV)).add("name", Values::Value(nameV)).add("time", Values::Value(timeV)).add("id", Values::Value(defaultV));
-
-
-  Serial.println("Create document... ");
-  String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
-
-  if (systemId.isEmpty()) {
-    // Parsing the JSON string
-    jsonParser.setJsonData(payload);
-
-    // Extracting the 'name' field
-    if (jsonParser.get(jsonData, "name")) {
-      String nameValue = jsonData.stringValue;
-      Serial.print("Name: ");
-      Serial.println(nameValue);
-
-      // Extracting the document ID from the 'name' value
-      int lastSlashIndex = nameValue.lastIndexOf('/');
-      if (lastSlashIndex != -1) {
-        systemId = nameValue.substring(lastSlashIndex + 1);
-        Serial.print("Document ID: ");
-        Serial.println(systemId);
-
-        File file = SPIFFS.open("/systeminfo.txt", "w");
-        if (!file) {
-          Serial.println("Failed to open file for reading");
-          return;
-        }
-
-        file.print(systemId);
-        // file.print()
-        // Metti anche #campane, #melodie e uid degli utenti
-        file.close();
-
-        Values::StringValue idV(systemId);
-        Document<Values::Value> update("id", Values::Value(idV));
-
-        PatchDocumentOptions patchOptions(DocumentMask("id"), DocumentMask(), Precondition());
-
-        // You can set the content of doc object directly with doc.setContent("your content")
-        Serial.println(doc_path + "/" + systemId);
-        String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path + "/" + systemId, patchOptions, update);
-
-        if (aClient.lastError().code() == 0)
-          Serial.println(payload);
-        else
-          printError(aClient.lastError().code(), aClient.lastError().message());
-      } else {
-        Serial.println("Errore: '/' non trovato nel campo 'name'");
-      }
-    } else {
-      Serial.println("Errore: campo 'name' non trovato nel JSON");
-    }
-  }
-}
-
 
 /*
 * @brief Function to handle the firebase authentication
@@ -662,28 +578,102 @@ bool isLinkedUser() {
     }
 }
 
-
-void linkUser() {
-    Serial.println("UID = " + userUid);
-    String doc_path = "users/" + userUid + "/systems";
-
-  Values::StringValue nameV("");
-  Values::StringValue idV(systemId);
-  Values::StringValue locationV("Genova");
-
-    Document<Values::Value> doc("location", Values::Value(locationV));
-    doc.add("id", Values::Value(idV)).add("name", Values::Value(nameV));
-
-    Serial.println("Create link system & user document... ");
-          String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, systemId, DocumentMask("name"), doc);
-}
-
 int setNumBells() {
   return 0;
 }
 
 int setNumMelodies() {
   return 0;
+}
+
+bool linkUser() {
+  Serial.println("Linking user with UID = " + userUid);
+  String doc_path = "users/" + userUid + "/systems";
+
+  Values::StringValue nameV("");
+  Values::StringValue defaultV("");
+  Values::StringValue locationV("Genova");
+
+  Document<Values::Value> doc("location", Values::Value(locationV));
+  doc.add("id", Values::Value(defaultV)).add("name", Values::Value(nameV));
+
+  Serial.println("Create link system & user document... ");
+  String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, systemId, DocumentMask(), doc);
+
+  Serial.println(payload);
+
+  jsonParser.setJsonData(payload);
+
+  if (jsonParser.get(jsonData, "name")) {
+    String nameValue = jsonData.stringValue;
+    Serial.print("Name: ");
+    Serial.println(nameValue);
+
+    // Extracting the document ID from the 'name' value
+    int lastSlashIndex = nameValue.lastIndexOf('/');
+    if (lastSlashIndex != -1) {
+      systemId = nameValue.substring(lastSlashIndex + 1);
+      Serial.print("Document ID: ");
+      Serial.println(systemId);
+
+      // Update the id field in the document
+      Values::StringValue idV(systemId);
+      Document<Values::Value> update("id", Values::Value(idV));
+
+      PatchDocumentOptions patchOptions(DocumentMask("id"), DocumentMask(), Precondition());
+
+      // You can set the content of doc object directly with doc.setContent("your content")
+      Serial.println(doc_path + "/" + systemId);
+      String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path + "/" + systemId, patchOptions, update);
+
+      if (aClient.lastError().code() == 0) {
+        Serial.println("User with email: " + email + " successfully linked with this system!");
+        return true; // For success
+      }
+      else
+        printError(aClient.lastError().code(), aClient.lastError().message());
+        return false; // For fail
+    }
+  }
+}
+
+bool createSystemDocument() {
+  String doc_path = "systems";
+
+  Values::IntegerValue bellsV(bellsNum);
+  Values::IntegerValue melodiesV(melodiesNum);
+  Values::StringValue nameV("");
+  Values::StringValue idV(systemId);
+
+  // Obtain the current time from NTP server
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to obtain time");
+    return false; // For fail
+  }
+
+  // Format the timestamp
+  char timestamp[21];
+  sprintf(timestamp, "%04d-%02d-%02dT%02d:%02d:%02dZ",
+          timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+          timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+
+  Values::TimestampValue timeV(timestamp);
+
+  Document<Values::Value> doc("#bells", Values::Value(bellsV));
+  doc.add("#melodies", Values::Value(melodiesV)).add("name", Values::Value(nameV)).add("time", Values::Value(timeV)).add("id", Values::Value(idV));
+
+
+  Serial.println("Create document... ");
+  String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
+
+  if (aClient.lastError().code() == 0) {
+    Serial.println("Document with system information created!");
+    return true; // For success
+  }
+  else
+    printError(aClient.lastError().code(), aClient.lastError().message());
+    return false; // For fail
 }
 //#########################################################################################################
 
@@ -713,6 +703,7 @@ void setup() {
   if (readProjectInformations()) {
     if (!connectToWifi()) {
       startAccessPoint();
+      first_start = true;
     } else {
       setupNTP();   // Network Time Protocol
       setupUART();  // Universal Asynchronous Receiver-Transmitter (seriale)
@@ -750,19 +741,36 @@ void loop() {
 
       userUid = app.getUid();
 
+      // Si aggiunge come parametro delle funzioni il sistem ID.
+      // Durante la prima accensione si da ID = 0, almeno crea un ID automatico.
+      if (first_start) {
+        if (linkUser()) {
+          if (createSystemDocument()) {
+            // Save the db information in the system_info.txt
+            File file = SPIFFS.open("/system_info.txt", "w");
+            if (!file) {
+              Serial.println("Failed to open project_info.txt for writing");
+              return;
+            }
+            file.println(systemId);
+            file.println(bellsNum);
+            file.println(melodiesNum);
+            file.println(userUid);
+            file.close();
+          }
+          else {
+            Serial.println("Document already existed or error occurred.");
+          }
+        }
+        else {
+          Serial.println("Document already existed or error occurred.");
+        }
+      }
 
-      File file = SPIFFS.open("/systeminfo.txt", "r");
-      if (!file) {
-        Serial.println("Failed to open file for reading");
-        return;
-      }
-      systemId = file.readStringUntil('\n');
-      if (systemId.isEmpty() || !checkDocumentExists()) {
-        createFirebaseDocument();
-      }
-      if (!isLinkedUser()) {
-        linkUser();
-      }
+      // Qui invece si dà il vero systemId che si prende dallo SPIFFS 
+      // (e magari si salva coem variabile globale)
+      // Si vanno a creare i documenti con quell'ID, se esistono già mi aspetto
+      // che il DB si arrabbi e che me lo faccia sapere in qualche modo
     }
     
     if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0))
