@@ -14,7 +14,7 @@
 #include <WebServer.h>
 // Firebase client
 #include <FirebaseClient.h>
-
+// Firebase json
 #include <FirebaseJson.h>
 
 #include <WiFiClientSecure.h>
@@ -63,7 +63,11 @@ String wifi_password = "";
 String email ="";
 String account_password="";
 
-String user_uid = "";
+// Global variables for system information and user information (stored in /systeminfo.txt)
+String systemId = "";
+int bellsNum = 0;
+int melodiesNum = 0;
+String userUid = "";
 
 // Other global variables
 bool verified = false;
@@ -375,8 +379,7 @@ bool verifyUser(const String &apiKey, const String &email, const String &passwor
 *
 *
 */
-void createFirebaseDocument(const String &systemId) {
-
+void createFirebaseDocument() {
     String doc_path = "systems";
 
     Values::IntegerValue bellsV(5);
@@ -659,9 +662,9 @@ String currentTimetoJSOn(struct tm* timeData)
   return output;
 }
 
-bool checkDocumentExists(const String &systemID)
+bool checkDocumentExists()
 {
-    String documentPath = "systems/" + systemID;
+    String documentPath = "systems/" + systemId;
 
     Serial.println("Checking document... ");
     String payload = Docs.get(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath, GetDocumentOptions(DocumentMask("id")));
@@ -679,18 +682,52 @@ bool checkDocumentExists(const String &systemID)
     }
 }
 
-void linkUser(const String &systemId) {
-    String doc_path = "users/" + user_uid + "/systems";
+bool isLinkedUser() {
+    Serial.println("Get the linker document");
+    String documentPath = "users/" + userUid + "/systems/" + systemId;
+    String payload = Docs.get(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath, GetDocumentOptions(DocumentMask("id")));
+
+    if (aClient.lastError().code() == 0) {
+        // Parsing the JSON string
+        jsonParser.setJsonData(payload);
+
+        // Check if the document contains the system ID
+        if (jsonParser.get(jsonData, "id") && jsonData.stringValue == systemId) {
+            Serial.println("User is linked to the system.");
+            return true;
+        } else {
+            Serial.println("User is not linked to the system.");
+            return false;
+        }
+    } else {
+        printError(aClient.lastError().code(), aClient.lastError().message());
+        return false;
+    }
+}
+
+
+void linkUser() {
+    userUid = app.getUid();
+    Serial.println("UID = " + userUid);
+    String doc_path = "users/" + userUid + "/systems";
 
     Values::StringValue nameV("");
     Values::StringValue idV(systemId);
     Values::StringValue locationV("");
 
     Document<Values::Value> doc("location", Values::Value(locationV));
-    doc.add("ids", Values::Value(idV)).add("name", Values::Value(nameV));
+    doc.add("id", Values::Value(idV)).add("name", Values::Value(nameV));
 
     Serial.println("Create link system & user document... ");
-          String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
+          String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, systemId, DocumentMask("name"), doc);
+}
+
+int setNumBells() {
+  return 0;
+}
+
+int setNumMelodies() {
+  return 0;
 }
 //#########################################################################################################
 
@@ -734,6 +771,10 @@ void setup() {
   {
     ReceiveandSaveProjectInformations();
   }
+  userUid = app.getUid();
+  bellsNum = setNumBells();
+  melodiesNum = setNumMelodies();
+  // Poi queste bisogna metterle nello spiffs
 }
 //#########################################################################################################################
 
@@ -764,18 +805,13 @@ void loop(){
           Serial.println("Failed to open file for writing");
           return;
       }
-      String systemId = file.readStringUntil('\n');
-
-      String documentPath = "systems";
-
-      Serial.println("Get a document... ");
-      Serial.println("With ID = " + systemId);
-
-      if (systemId.isEmpty() || !checkDocumentExists(systemId)) {
-        createFirebaseDocument(systemId);
+      systemId = file.readStringUntil('\n');
+      if (systemId.isEmpty() || !checkDocumentExists()) {
+        createFirebaseDocument();
       }
-
-      linkUser(systemId);
+      if (!isLinkedUser()) {
+        linkUser();
+      }
     }
     
     if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0))
