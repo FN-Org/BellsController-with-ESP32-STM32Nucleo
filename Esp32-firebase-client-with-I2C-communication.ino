@@ -63,10 +63,14 @@ String wifi_password = "";
 String email = "";
 String account_password = "";
 
-// Global variables for system information and user information (stored in /systeminfo.txt)
+// Global variables for system information and user information (stored in /system_info.txt)
 String systemId = "";
+String name = "";
+String location = "";
 int bellsNum = 0;
 int melodiesNum = 0;
+String pin = "";
+
 String userUid = "";
 
 // Other global variables
@@ -74,7 +78,6 @@ bool verified = false;
 unsigned long dataMillis = 0;
 bool taskCompleted = false;
 bool first_time = true;
-bool first_start = false;
 
 // Global variables for the time
 // Set time zone (UTC+1 for Italy)
@@ -103,7 +106,7 @@ unsigned long last_time_sent = 0;
 * @brief Function to handle the connection to the Access Point
 * 
 */
-void handleRoot() {
+void handleCredentialsForm() {
   String htmlForm = "<!DOCTYPE html><html><head><style>"
                     "body {background-color: #007BFF; font-family: Arial, sans-serif;}"
                     ".container {background-color: white; padding: 20px; margin: auto; width: 50%; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);}"
@@ -113,7 +116,7 @@ void handleRoot() {
                     "label {font-weight: bold;}"
                     "</style></head><body>"
                     "<div class=\"container\">"
-                    "<form action=\"/get\" method=\"post\">"
+                    "<form action=\"/first_submit\" method=\"post\">"
                     "<label for=\"ssid\">SSID:</label><br>"
                     "<input type=\"text\" id=\"ssid\" name=\"ssid\"><br>"
                     "<label for=\"wifi_password\">WiFi Password:</label><br>"
@@ -122,6 +125,33 @@ void handleRoot() {
                     "<input type=\"text\" id=\"email\" name=\"email\"><br>"
                     "<label for=\"account_password\">Account Password:</label><br>"
                     "<input type=\"text\" id=\"account_password\" name=\"account_password\"><br><br>"
+                    "<input type=\"submit\" value=\"Submit\">"
+                    "</form></div>"
+                    "</body></html>";
+  server.send(200, "text/html", htmlForm);
+}
+
+void handleSystemForm() {
+  String htmlForm = "<!DOCTYPE html><html><head><style>"
+                    "body {background-color: #007BFF; font-family: Arial, sans-serif;}"
+                    ".container {background-color: white; padding: 20px; margin: auto; width: 50%; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);}"
+                    "input[type=text], input[type=password] {width: 100%; padding: 12px; margin: 8px 0; display: inline-block; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;}"
+                    "input[type=submit] {width: 100%; background-color: #4CAF50; color: white; padding: 14px 20px; margin: 8px 0; border: none; border-radius: 4px; cursor: pointer;}"
+                    "input[type=submit]:hover {background-color: #45a049;}"
+                    "label {font-weight: bold;}"
+                    "</style></head><body>"
+                    "<div class=\"container\">"
+                    "<form action=\"/second_submit\" method=\"post\">"
+                    "<label for=\"num_campane\">Numero Campane:</label><br>"
+                    "<input type=\"number\" id=\"num_campane\" name=\"num_campane\"><br>"
+                    "<label for=\"num_melodie\">Numero Melodie:</label><br>"
+                    "<input type=\"number\" id=\"num_melodie\" name=\"num_melodie\"><br>"
+                    "<label for=\"name\">Name:</label><br>"
+                    "<input type=\"text\" id=\"name\" name=\"name\"><br>"
+                    "<label for=\"location\">Location:</label><br>"
+                    "<input type=\"text\" id=\"location\" name=\"location\"><br>"
+                    "<label for=\"pin\">PIN:</label><br>"
+                    "<input type=\"text\" id=\"pin\" name=\"pin\"><br><br>"
                     "<input type=\"submit\" value=\"Submit\">"
                     "</form></div>"
                     "</body></html>";
@@ -143,6 +173,21 @@ void saveCredentials(const String& ssid, const String& wifi_password, const Stri
   file.println(wifi_password);
   file.println(email);
   file.println(account_password);
+  file.close();
+}
+
+void saveSystemInfo(const String& name, const String& location, const int& bNum, const int& mNum, const String& pin) {
+  File file = SPIFFS.open("/system_info.txt", "w");
+  if (!file) {
+    Serial.println("Failed to open file for writing");
+    return;
+  }
+
+  file.println(name);
+  file.println(location);
+  file.println(bNum);
+  file.println(mNum);
+  file.println(pin);
   file.close();
 }
 
@@ -182,7 +227,7 @@ void readCredentials() {
 * @brief Function to handle the submit of the form when connected to the access point
 * 
 */
-void handleSubmit() {
+void handleCredentialsSubmit() {
   ssid = server.arg("ssid");
   wifi_password = server.arg("wifi_password");
 
@@ -199,7 +244,29 @@ void handleSubmit() {
   Serial.println("email: " + email);
   Serial.println("account password: " + account_password);
 
-  server.send(200, "text/html", "Credentials received. Rebooting...");
+  // Redirect to the second form
+  server.sendHeader("Location", "/second_form");
+  server.send(303);
+}
+
+void handleSystemSubmit() {
+  bellsNum = server.arg("num_campane").toInt();
+  melodiesNum = server.arg("num_melodie").toInt();
+  name = server.arg("name");
+  location = server.arg("location");
+  pin = server.arg("pin");
+
+  // Save details (implement saveDetails function as needed)
+  saveSystemInfo(name, location, bellsNum, melodiesNum, pin);
+
+  // Print details for debugging
+  Serial.println("Name: " + name);
+  Serial.println("Location: " + location);
+    Serial.println("Numero Campane: " + bellsNum.toString());
+  Serial.println("Numero Melodie: " + melodiesNum.toString());
+  Serial.println("PIN: " + pin);
+
+  server.send(200, "text/html", "Details received. Thank you!");
   delay(2000);
   ESP.restart();
 }
@@ -225,8 +292,10 @@ void startAccessPoint() {
   Serial.println(IP);
 
   // Set the handlers of the web server
-  server.on("/", handleRoot);
-  server.on("/get", HTTP_POST, handleSubmit);
+  server.on("/", handleCredentialsForm);
+  server.on("/first_submit", HTTP_POST, handleCredentialsSubmit);
+  server.on("/second_form", handleSystemForm);
+  server.on("/second_submit", handleSystemSubmit);
   server.begin();
   Serial.println("Web server started.");
 }
@@ -538,54 +607,6 @@ String currentTimetoJSOn(struct tm* timeData) {
   return output;
 }
 
-bool checkDocumentExists()
-{
-    String documentPath = "systems/" + systemId;
-
-  Serial.println("Checking document... ");
-  String payload = Docs.get(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath, GetDocumentOptions(DocumentMask("id")));
-
-  if (aClient.lastError().code() == 0) {
-    Serial.println("Document exists: " + payload);
-    return true;
-  } else {
-    Serial.println("Document does not exist or error occurred");
-    printError(aClient.lastError().code(), aClient.lastError().message());
-    return false;
-  }
-}
-
-bool isLinkedUser() {
-    Serial.println("Get the linker document");
-    String documentPath = "users/" + userUid + "/systems/" + systemId;
-    String payload = Docs.get(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath, GetDocumentOptions(DocumentMask("id")));
-
-    if (aClient.lastError().code() == 0) {
-        // Parsing the JSON string
-        jsonParser.setJsonData(payload);
-
-        // Check if the document contains the system ID
-        if (jsonParser.get(jsonData, "id") && jsonData.stringValue == systemId) {
-            Serial.println("User is linked to the system.");
-            return true;
-        } else {
-            Serial.println("User is not linked to the system.");
-            return false;
-        }
-    } else {
-        printError(aClient.lastError().code(), aClient.lastError().message());
-        return false;
-    }
-}
-
-int setNumBells() {
-  return 0;
-}
-
-int setNumMelodies() {
-  return 0;
-}
-
 bool linkUser() {
   Serial.println("Linking user with UID = " + userUid);
   String doc_path = "users/" + userUid + "/systems";
@@ -634,45 +655,44 @@ bool createSystemDocument() {
 
   if (aClient.lastError().code() == 0) {
     Serial.println("Document with system information created!");
-    // return true; // For success
+
+    jsonParser.setJsonData(payload);
+
+    if (jsonParser.get(jsonData, "name")) {
+      String nameValue = jsonData.stringValue;
+      Serial.print("Name: ");
+      Serial.println(nameValue);
+
+      // Extracting the document ID from the 'name' value
+      int lastSlashIndex = nameValue.lastIndexOf('/');
+      if (lastSlashIndex != -1) {
+        systemId = nameValue.substring(lastSlashIndex + 1);
+        Serial.print("Document ID: ");
+        Serial.println(systemId);
+
+        // Update the id field in the document
+        Values::StringValue idV(systemId);
+        Document<Values::Value> update("id", Values::Value(idV));
+
+        PatchDocumentOptions patchOptions(DocumentMask("id"), DocumentMask(), Precondition());
+
+        // You can set the content of doc object directly with doc.setContent("your content")
+        Serial.println(doc_path + "/" + systemId);
+        String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path + "/" + systemId, patchOptions, update);
+
+        if (aClient.lastError().code() == 0) {
+          Serial.println("Update field id success");
+          return true; // For success
+        }
+        else
+          printError(aClient.lastError().code(), aClient.lastError().message());
+          return false; // For fail
+      }
+    }
   }
   else {
     printError(aClient.lastError().code(), aClient.lastError().message());
-    // return false; // For fail
-  }
-
-  jsonParser.setJsonData(payload);
-
-  if (jsonParser.get(jsonData, "name")) {
-    String nameValue = jsonData.stringValue;
-    Serial.print("Name: ");
-    Serial.println(nameValue);
-
-    // Extracting the document ID from the 'name' value
-    int lastSlashIndex = nameValue.lastIndexOf('/');
-    if (lastSlashIndex != -1) {
-      systemId = nameValue.substring(lastSlashIndex + 1);
-      Serial.print("Document ID: ");
-      Serial.println(systemId);
-
-      // Update the id field in the document
-      Values::StringValue idV(systemId);
-      Document<Values::Value> update("id", Values::Value(idV));
-
-      PatchDocumentOptions patchOptions(DocumentMask("id"), DocumentMask(), Precondition());
-
-      // You can set the content of doc object directly with doc.setContent("your content")
-      Serial.println(doc_path + "/" + systemId);
-      String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path + "/" + systemId, patchOptions, update);
-
-      if (aClient.lastError().code() == 0) {
-        Serial.println("Update field id success");
-        return true; // For success
-      }
-      else
-        printError(aClient.lastError().code(), aClient.lastError().message());
-        return false; // For fail
-    }
+    return false; // For fail
   }
 }
 //#########################################################################################################
@@ -711,9 +731,6 @@ void setup() {
   } else {
     ReceiveandSaveProjectInformations();
   }
-  bellsNum = setNumBells();
-  melodiesNum = setNumMelodies();
-  // Poi queste bisogna metterle nello spiffs
 }
 //#########################################################################################################################
 
@@ -758,6 +775,7 @@ void loop() {
             file.println(melodiesNum);
             file.println(userUid);
             file.close();
+            Serial.println("Variables written in the SPIFFS");
           }
           else {
             Serial.println("Document already existed or error occurred.");
