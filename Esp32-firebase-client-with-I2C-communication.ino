@@ -591,16 +591,55 @@ bool linkUser() {
   String doc_path = "users/" + userUid + "/systems";
 
   Values::StringValue nameV("");
-  Values::StringValue defaultV("");
+  Values::StringValue idV(systemId);
   Values::StringValue locationV("Genova");
 
   Document<Values::Value> doc("location", Values::Value(locationV));
-  doc.add("id", Values::Value(defaultV)).add("name", Values::Value(nameV));
+  doc.add("id", Values::Value(idV)).add("name", Values::Value(nameV));
 
   Serial.println("Create link system & user document... ");
   String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, systemId, DocumentMask(), doc);
 
   Serial.println(payload);
+}
+
+bool createSystemDocument() {
+  String doc_path = "systems";
+
+  Values::IntegerValue bellsV(bellsNum);
+  Values::IntegerValue melodiesV(melodiesNum);
+  Values::StringValue nameV("");
+  Values::StringValue defaultV("");
+
+  // Obtain the current time from NTP server
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to obtain time");
+    return false; // For fail
+  }
+
+  // Format the timestamp
+  char timestamp[21];
+  sprintf(timestamp, "%04d-%02d-%02dT%02d:%02d:%02dZ",
+          timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+          timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+
+  Values::TimestampValue timeV(timestamp);
+
+  Document<Values::Value> doc("#bells", Values::Value(bellsV));
+  doc.add("#melodies", Values::Value(melodiesV)).add("name", Values::Value(nameV)).add("time", Values::Value(timeV)).add("id", Values::Value(defaultV));
+
+  Serial.println("Create document... ");
+  String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
+
+  if (aClient.lastError().code() == 0) {
+    Serial.println("Document with system information created!");
+    // return true; // For success
+  }
+  else {
+    printError(aClient.lastError().code(), aClient.lastError().message());
+    // return false; // For fail
+  }
 
   jsonParser.setJsonData(payload);
 
@@ -627,7 +666,7 @@ bool linkUser() {
       String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path + "/" + systemId, patchOptions, update);
 
       if (aClient.lastError().code() == 0) {
-        Serial.println("User with email: " + email + " successfully linked with this system!");
+        Serial.println("Update field id success");
         return true; // For success
       }
       else
@@ -635,45 +674,6 @@ bool linkUser() {
         return false; // For fail
     }
   }
-}
-
-bool createSystemDocument() {
-  String doc_path = "systems";
-
-  Values::IntegerValue bellsV(bellsNum);
-  Values::IntegerValue melodiesV(melodiesNum);
-  Values::StringValue nameV("");
-  Values::StringValue idV(systemId);
-
-  // Obtain the current time from NTP server
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
-    Serial.println("Failed to obtain time");
-    return false; // For fail
-  }
-
-  // Format the timestamp
-  char timestamp[21];
-  sprintf(timestamp, "%04d-%02d-%02dT%02d:%02d:%02dZ",
-          timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-          timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-
-  Values::TimestampValue timeV(timestamp);
-
-  Document<Values::Value> doc("#bells", Values::Value(bellsV));
-  doc.add("#melodies", Values::Value(melodiesV)).add("name", Values::Value(nameV)).add("time", Values::Value(timeV)).add("id", Values::Value(idV));
-
-
-  Serial.println("Create document... ");
-  String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
-
-  if (aClient.lastError().code() == 0) {
-    Serial.println("Document with system information created!");
-    return true; // For success
-  }
-  else
-    printError(aClient.lastError().code(), aClient.lastError().message());
-    return false; // For fail
 }
 //#########################################################################################################
 
@@ -703,7 +703,6 @@ void setup() {
   if (readProjectInformations()) {
     if (!connectToWifi()) {
       startAccessPoint();
-      first_start = true;
     } else {
       setupNTP();   // Network Time Protocol
       setupUART();  // Universal Asynchronous Receiver-Transmitter (seriale)
@@ -741,17 +740,19 @@ void loop() {
 
       userUid = app.getUid();
 
+      File file = SPIFFS.open("/system_info.txt", "w");
+      if (!file) {
+        Serial.println("Failed to open project_info.txt for writing");
+        return;
+      }
+
+      // Usiamo systemId nella create document, che la prendiamo dal file. se è vuota ok e se invece non è vuota dovrebbe darci errore.
+
       // Si aggiunge come parametro delle funzioni il sistem ID.
       // Durante la prima accensione si da ID = 0, almeno crea un ID automatico.
-      if (first_start) {
-        if (linkUser()) {
-          if (createSystemDocument()) {
+        if (createSystemDocument()) {
+          if (linkUser()) {
             // Save the db information in the system_info.txt
-            File file = SPIFFS.open("/system_info.txt", "w");
-            if (!file) {
-              Serial.println("Failed to open project_info.txt for writing");
-              return;
-            }
             file.println(systemId);
             file.println(bellsNum);
             file.println(melodiesNum);
@@ -765,7 +766,6 @@ void loop() {
         else {
           Serial.println("Document already existed or error occurred.");
         }
-      }
 
       // Qui invece si dà il vero systemId che si prende dallo SPIFFS 
       // (e magari si salva coem variabile globale)
