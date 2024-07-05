@@ -118,13 +118,13 @@ void handleCredentialsForm() {
                     "<div class=\"container\">"
                     "<form action=\"/first_submit\" method=\"post\">"
                     "<label for=\"ssid\">SSID:</label><br>"
-                    "<input type=\"text\" id=\"ssid\" name=\"ssid\"><br>"
+                    "<input type=\"text\" id=\"ssid\" name=\"ssid\" required><br>"
                     "<label for=\"wifi_password\">WiFi Password:</label><br>"
-                    "<input type=\"text\" id=\"wifi_password\" name=\"wifi_password\"><br>"
+                    "<input type=\"text\" id=\"wifi_password\" name=\"wifi_password\" required><br>"
                     "<label for=\"email\">Email:</label><br>"
-                    "<input type=\"text\" id=\"email\" name=\"email\"><br>"
+                    "<input type=\"text\" id=\"email\" name=\"email\" required><br>"
                     "<label for=\"account_password\">Account Password:</label><br>"
-                    "<input type=\"text\" id=\"account_password\" name=\"account_password\"><br><br>"
+                    "<input type=\"text\" id=\"account_password\" name=\"account_password\" required><br><br>"
                     "<input type=\"submit\" value=\"Submit\">"
                     "</form></div>"
                     "</body></html>";
@@ -143,15 +143,15 @@ void handleSystemForm() {
                     "<div class=\"container\">"
                     "<form action=\"/second_submit\" method=\"post\">"
                     "<label for=\"num_campane\">Numero Campane:</label><br>"
-                    "<input type=\"number\" id=\"num_campane\" name=\"num_campane\"><br>"
+                    "<input type=\"number\" id=\"num_campane\" name=\"num_campane\" required><br>"
                     "<label for=\"num_melodie\">Numero Melodie:</label><br>"
-                    "<input type=\"number\" id=\"num_melodie\" name=\"num_melodie\"><br>"
+                    "<input type=\"number\" id=\"num_melodie\" name=\"num_melodie\" required><br>"
                     "<label for=\"name\">Name:</label><br>"
-                    "<input type=\"text\" id=\"name\" name=\"name\"><br>"
+                    "<input type=\"text\" id=\"name\" name=\"name\" required><br>"
                     "<label for=\"location\">Location:</label><br>"
-                    "<input type=\"text\" id=\"location\" name=\"location\"><br>"
+                    "<input type=\"text\" id=\"location\" name=\"location\" required><br>"
                     "<label for=\"pin\">PIN:</label><br>"
-                    "<input type=\"text\" id=\"pin\" name=\"pin\"><br><br>"
+                    "<input type=\"text\" id=\"pin\" name=\"pin\" required><br><br>"
                     "<input type=\"submit\" value=\"Submit\">"
                     "</form></div>"
                     "</body></html>";
@@ -262,8 +262,8 @@ void handleSystemSubmit() {
   // Print details for debugging
   Serial.println("Name: " + name);
   Serial.println("Location: " + location);
-    Serial.println("Numero Campane: " + bellsNum.toString());
-  Serial.println("Numero Melodie: " + melodiesNum.toString());
+  Serial.println("Numero Campane: " + String(bellsNum));
+  Serial.println("Numero Melodie: " + String(melodiesNum));
   Serial.println("PIN: " + pin);
 
   server.send(200, "text/html", "Details received. Thank you!");
@@ -376,7 +376,7 @@ bool setupFirestore() {
   aClient.setAsyncResult(aResult_no_callback);
 
   verified = verifyUser(API_KEY, email, account_password);
-
+  
   return verified;
 }
 
@@ -560,7 +560,7 @@ bool readProjectInformations() {
 */
 void setupNTP() {
   // Configure the NTP client
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  configTime(0, 0, ntpServer);
 }
 
 void setupUART() {
@@ -579,15 +579,6 @@ void currentTimeSending() {
 
   Serial2.println(JSON_time);
 }
-/*
-  struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)){
-    Serial.println("Errore nel recuperare l'ora corrente");
-    return;
-  }
-  Serial.println(&timeinfo, "Ora corrente: %A, %B %d %Y %H:%M:%S");
-}
-*/
 
 String currentTimetoJSOn(struct tm* timeData) {
   StaticJsonDocument<JSON_BUFFER_SIZE> jsonBuffer;
@@ -611,9 +602,9 @@ bool linkUser() {
   Serial.println("Linking user with UID = " + userUid);
   String doc_path = "users/" + userUid + "/systems";
 
-  Values::StringValue nameV("");
+  Values::StringValue nameV(name);
   Values::StringValue idV(systemId);
-  Values::StringValue locationV("Genova");
+  Values::StringValue locationV(location);
 
   Document<Values::Value> doc("location", Values::Value(locationV));
   doc.add("id", Values::Value(idV)).add("name", Values::Value(nameV));
@@ -621,79 +612,140 @@ bool linkUser() {
   Serial.println("Create link system & user document... ");
   String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, systemId, DocumentMask(), doc);
 
-  Serial.println(payload);
+  if (aClient.lastError().code() == 0) {
+    Serial.println("System & user linked");
+    return true;  // For success
+  } else {
+    printError(aClient.lastError().code(), aClient.lastError().message());
+    return false;  // For fail
+  }
 }
 
 bool createSystemDocument() {
-  String doc_path = "systems";
+  String doc_path = "systems/" + systemId;
+  Serial.println("Percorso del documento: " + doc_path);
 
   Values::IntegerValue bellsV(bellsNum);
   Values::IntegerValue melodiesV(melodiesNum);
-  Values::StringValue nameV("");
-  Values::StringValue defaultV("");
+  Values::StringValue nameV(name);
+  Values::StringValue locationV(location);
+  Serial.println("Sto per creare docuemnto con questo id: " + systemId);
+  Values::StringValue defaultV(systemId);
 
   // Obtain the current time from NTP server
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
     Serial.println("Failed to obtain time");
-    return false; // For fail
+    return false;
   }
 
   // Format the timestamp
-  char timestamp[21];
-  sprintf(timestamp, "%04d-%02d-%02dT%02d:%02d:%02dZ",
-          timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-          timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  char timestamp[25];  // Buffer for the formatted timestamp (adjust size as needed)
+  strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
 
   Values::TimestampValue timeV(timestamp);
 
   Document<Values::Value> doc("#bells", Values::Value(bellsV));
   doc.add("#melodies", Values::Value(melodiesV)).add("name", Values::Value(nameV)).add("time", Values::Value(timeV)).add("id", Values::Value(defaultV));
+  doc.add("location", Values::Value(locationV));
 
-  Serial.println("Create document... ");
-  String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
+  try {
+    Serial.println("Create document... ");
+    String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
 
-  if (aClient.lastError().code() == 0) {
-    Serial.println("Document with system information created!");
+    if (aClient.lastError().code() == 0) {
+      Serial.println("Document with system information created!");
 
-    jsonParser.setJsonData(payload);
+      jsonParser.setJsonData(payload);
 
-    if (jsonParser.get(jsonData, "name")) {
-      String nameValue = jsonData.stringValue;
-      Serial.print("Name: ");
-      Serial.println(nameValue);
+      if (jsonParser.get(jsonData, "name")) {
+        String nameValue = jsonData.stringValue;
+        Serial.print("Name: ");
+        Serial.println(nameValue);
 
-      // Extracting the document ID from the 'name' value
-      int lastSlashIndex = nameValue.lastIndexOf('/');
-      if (lastSlashIndex != -1) {
-        systemId = nameValue.substring(lastSlashIndex + 1);
-        Serial.print("Document ID: ");
-        Serial.println(systemId);
+        // Extracting the document ID from the 'name' value
+        int lastSlashIndex = nameValue.lastIndexOf('/');
+        if (lastSlashIndex != -1) {
+          systemId = nameValue.substring(lastSlashIndex + 1);
+          Serial.print("Document ID: ");
+          Serial.println(systemId);
 
-        // Update the id field in the document
-        Values::StringValue idV(systemId);
-        Document<Values::Value> update("id", Values::Value(idV));
+          // Update the id field in the document
+          Values::StringValue idV(systemId);
+          Document<Values::Value> update("id", Values::Value(idV));
 
-        PatchDocumentOptions patchOptions(DocumentMask("id"), DocumentMask(), Precondition());
+          PatchDocumentOptions patchOptions(DocumentMask("id"), DocumentMask(), Precondition());
 
-        // You can set the content of doc object directly with doc.setContent("your content")
-        Serial.println(doc_path + "/" + systemId);
-        String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path + "/" + systemId, patchOptions, update);
+          // You can set the content of doc object directly with doc.setContent("your content")
+          Serial.println(doc_path + systemId);
+          String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, patchOptions, update);
 
-        if (aClient.lastError().code() == 0) {
-          Serial.println("Update field id success");
-          return true; // For success
+          if (aClient.lastError().code() == 0) {
+            Serial.println("Update field id success");
+            return true;  // For success
+          } else {
+            printError(aClient.lastError().code(), aClient.lastError().message());
+            return false;  // For fail
+          }
         }
-        else
-          printError(aClient.lastError().code(), aClient.lastError().message());
-          return false; // For fail
+      } else {
+        printError(aClient.lastError().code(), aClient.lastError().message());
+        return false;  // For fail
       }
     }
   }
-  else {
-    printError(aClient.lastError().code(), aClient.lastError().message());
-    return false; // For fail
+  catch (std::exception& e) {
+    Serial.print("Exception caught: ");
+    Serial.println(e.what());
+    // Handle the exception as needed
+    return false;  // Indicate failure
   }
+}
+
+void readSystemInfo() {
+  File file = SPIFFS.open("/system_info.txt", "r");
+  if (!file) {
+    Serial.println("Failed to open system_info.txt for reading");
+    return;
+  }
+
+  Serial.println("system_info.txt document:");
+  int lineNumber = 0;
+  String line;
+  while (file.available()) {
+    line = file.readStringUntil('\n');
+    line.trim();  // Rimuove spazi bianchi iniziali e finali
+    lineNumber++;
+    switch (lineNumber) {
+      case 1:
+        name = line;
+        Serial.println("name: " + line);
+        break;
+      case 2:
+        location = line;
+        Serial.println("location: " + line);
+        break;
+      case 3:
+        bellsNum = line.toInt();
+        Serial.println("bells number: " + line);
+        break;
+      case 4:
+        melodiesNum = line.toInt();
+        Serial.println("melodies number: " + line);
+        break;
+      case 5:
+        pin = line;
+        Serial.println("pin: " + line);
+        break;
+      case 6:
+        systemId = line;
+        Serial.println("system id: " + line);
+        break;
+      default:
+        break;
+    }
+  }
+  file.close();
 }
 //#########################################################################################################
 
@@ -721,12 +773,12 @@ void setup() {
   delay(1000);
 
   if (readProjectInformations()) {
-    if (!connectToWifi()) {
+    File file = SPIFFS.open("system_info,txt", "r");
+    if (!connectToWifi() && !setupFirestore() && file.size() > 0) {
       startAccessPoint();
     } else {
       setupNTP();   // Network Time Protocol
       setupUART();  // Universal Asynchronous Receiver-Transmitter (seriale)
-      setupFirestore();
     }
   } else {
     ReceiveandSaveProjectInformations();
@@ -756,64 +808,62 @@ void loop() {
       first_time = !first_time;
 
       userUid = app.getUid();
+      Serial.println("User UID in the loop: " + userUid);
 
-      File file = SPIFFS.open("/system_info.txt", "w");
-      if (!file) {
-        Serial.println("Failed to open project_info.txt for writing");
-        return;
-      }
+      readSystemInfo();  // It reads the system information from the file in the SPIFFS (system_info.txt)
 
       // Usiamo systemId nella create document, che la prendiamo dal file. se è vuota ok e se invece non è vuota dovrebbe darci errore.
 
       // Si aggiunge come parametro delle funzioni il sistem ID.
       // Durante la prima accensione si da ID = 0, almeno crea un ID automatico.
-        if (createSystemDocument()) {
-          if (linkUser()) {
-            // Save the db information in the system_info.txt
-            file.println(systemId);
-            file.println(bellsNum);
-            file.println(melodiesNum);
-            file.println(userUid);
-            file.close();
-            Serial.println("Variables written in the SPIFFS");
+      if (createSystemDocument()) {
+        if (linkUser()) {
+          Serial.println("Fatto LINKUSER");
+          // Save the db information in the system_info.txt
+          File file = SPIFFS.open("/system_info.txt", "a");
+          if (!file) {
+            Serial.println("Failed to open file for appending");
+            return;
           }
-          else {
-            Serial.println("Document already existed or error occurred.");
-          }
-        }
-        else {
+          Serial.println("Aperto file in append");
+          file.println(systemId);
+          file.close();
+          Serial.println("Variables written in the SPIFFS");
+        } else {
           Serial.println("Document already existed or error occurred.");
         }
+      } else {
+        Serial.println("Document already existed or error occurred.");
+      }
 
-      // Qui invece si dà il vero systemId che si prende dallo SPIFFS 
+      // Qui invece si dà il vero systemId che si prende dallo SPIFFS
       // (e magari si salva coem variabile globale)
       // Si vanno a creare i documenti con quell'ID, se esistono già mi aspetto
       // che il DB si arrabbi e che me lo faccia sapere in qualche modo
     }
-    
-    if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0))
-    {
-        dataMillis = millis();
 
-        // Should run the Create_Documents.ino prior to test this example to create the documents in the collection Id at a0/b0/c0
+    if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0)) {
+      dataMillis = millis();
 
-        // a0 is the collection id, b0 is the document id in collection a0 and c0 is the collection id id in the document b0.
-        String collectionId = "systems/KkEsJ6nVzUb4SSZhLANG/events";
+      // Should run the Create_Documents.ino prior to test this example to create the documents in the collection Id at a0/b0/c0
 
-        // If the collection Id path contains space e.g. "a b/c d/e f"
-        // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
+      // a0 is the collection id, b0 is the document id in collection a0 and c0 is the collection id id in the document b0.
+      String collectionId = "systems/KkEsJ6nVzUb4SSZhLANG/events";
 
-        Serial.println("List the documents in a collection... ");
+      // If the collection Id path contains space e.g. "a b/c d/e f"
+      // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
 
-        ListDocumentsOptions listDocsOptions;
-        listDocsOptions.pageSize(100);
+      Serial.println("List the documents in a collection... ");
 
-        String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
+      ListDocumentsOptions listDocsOptions;
+      listDocsOptions.pageSize(100);
 
-        if (aClient.lastError().code() == 0)
-            Serial.println(payload);
-        else
-            printError(aClient.lastError().code(), aClient.lastError().message());
+      String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
+
+      if (aClient.lastError().code() == 0)
+        Serial.println(payload);
+      else
+        printError(aClient.lastError().code(), aClient.lastError().message());
     }
 
     if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0)) {
