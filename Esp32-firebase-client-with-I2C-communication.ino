@@ -69,7 +69,7 @@ String name = "";
 String location = "";
 int bellsNum = 0;
 int melodiesNum = 0;
-String pin = "";
+int pin = 0;
 
 String userUid = "";
 
@@ -151,7 +151,7 @@ void handleSystemForm() {
                     "<label for=\"location\">Location:</label><br>"
                     "<input type=\"text\" id=\"location\" name=\"location\" required><br>"
                     "<label for=\"pin\">PIN:</label><br>"
-                    "<input type=\"text\" id=\"pin\" name=\"pin\" required><br><br>"
+                    "<input type=\"number\" id=\"pin\" name=\"pin\" required><br><br>"
                     "<input type=\"submit\" value=\"Submit\">"
                     "</form></div>"
                     "</body></html>";
@@ -176,7 +176,7 @@ void saveCredentials(const String& ssid, const String& wifi_password, const Stri
   file.close();
 }
 
-void saveSystemInfo(const String& name, const String& location, const int& bNum, const int& mNum, const String& pin) {
+void saveSystemInfo(const String& name, const String& location, const int& bNum, const int& mNum, const int& pin) {
   File file = SPIFFS.open("/system_info.txt", "w");
   if (!file) {
     Serial.println("Failed to open file for writing");
@@ -254,7 +254,7 @@ void handleSystemSubmit() {
   melodiesNum = server.arg("num_melodie").toInt();
   name = server.arg("name");
   location = server.arg("location");
-  pin = server.arg("pin");
+  pin = server.arg("pin").toInt();
 
   // Save details (implement saveDetails function as needed)
   saveSystemInfo(name, location, bellsNum, melodiesNum, pin);
@@ -264,7 +264,7 @@ void handleSystemSubmit() {
   Serial.println("Location: " + location);
   Serial.println("Numero Campane: " + String(bellsNum));
   Serial.println("Numero Melodie: " + String(melodiesNum));
-  Serial.println("PIN: " + pin);
+  Serial.println("PIN: " + String(pin));
 
   server.send(200, "text/html", "Details received. Thank you!");
   delay(2000);
@@ -361,21 +361,33 @@ bool setupFirestore() {
   UserAuth user_auth(API_KEY, email, account_password);
   Serial.println("Initializing app...");
 
+  Serial.println("Sono qui 1");
+
   ssl_client.setInsecure();
 
   authHandler();
+
+  Serial.println("Sono qui 2");
 
   // Binding the FirebaseApp for authentication handler.
   // To unbind, use Docs.resetApp();
   initializeApp(aClient, app, getAuth(user_auth), aResult_no_callback);
 
+  Serial.println("Sono qui 3");
+
   app.getApp<Firestore::Documents>(Docs);
+
+  Serial.println("Sono qui 4");
 
   // In case setting the external async result to the sync task (optional)
   // To unset, use unsetAsyncResult().
   aClient.setAsyncResult(aResult_no_callback);
 
+  Serial.println("Sono qui 5");
+
   verified = verifyUser(API_KEY, email, account_password);
+
+  Serial.println("Sono qui 6: " + String(verified));
   
   return verified;
 }
@@ -600,7 +612,7 @@ String currentTimetoJSOn(struct tm* timeData) {
 
 bool linkUser() {
   Serial.println("Linking user with UID = " + userUid);
-  String doc_path = "users/" + userUid + "/systems";
+  String doc_path = "users/" + userUid + "/systems/" + systemId;
 
   Values::StringValue nameV(name);
   Values::StringValue idV(systemId);
@@ -610,7 +622,7 @@ bool linkUser() {
   doc.add("id", Values::Value(idV)).add("name", Values::Value(nameV));
 
   Serial.println("Create link system & user document... ");
-  String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, systemId, DocumentMask(), doc);
+  String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask(), doc);
 
   if (aClient.lastError().code() == 0) {
     Serial.println("System & user linked");
@@ -629,7 +641,7 @@ bool createSystemDocument() {
   Values::IntegerValue melodiesV(melodiesNum);
   Values::StringValue nameV(name);
   Values::StringValue locationV(location);
-  Serial.println("Sto per creare docuemnto con questo id: " + systemId);
+  Values::IntegerValue pinV(pin);
   Values::StringValue defaultV(systemId);
 
   // Obtain the current time from NTP server
@@ -645,9 +657,9 @@ bool createSystemDocument() {
 
   Values::TimestampValue timeV(timestamp);
 
-  Document<Values::Value> doc("#bells", Values::Value(bellsV));
-  doc.add("#melodies", Values::Value(melodiesV)).add("name", Values::Value(nameV)).add("time", Values::Value(timeV)).add("id", Values::Value(defaultV));
-  doc.add("location", Values::Value(locationV));
+  Document<Values::Value> doc("nBells", Values::Value(bellsV));
+  doc.add("nMelodies", Values::Value(melodiesV)).add("name", Values::Value(nameV)).add("time", Values::Value(timeV)).add("id", Values::Value(defaultV));
+  doc.add("location", Values::Value(locationV)).add("pin", Values::Value(pinV));
 
   try {
     Serial.println("Create document... ");
@@ -667,8 +679,9 @@ bool createSystemDocument() {
         int lastSlashIndex = nameValue.lastIndexOf('/');
         if (lastSlashIndex != -1) {
           systemId = nameValue.substring(lastSlashIndex + 1);
-          Serial.print("Document ID: ");
-          Serial.println(systemId);
+          Serial.print("Document ID: " + systemId);
+          String doc_path = "systems/" + systemId;
+          Serial.println("Nuovo percorso del documento: " + doc_path);
 
           // Update the id field in the document
           Values::StringValue idV(systemId);
@@ -734,7 +747,7 @@ void readSystemInfo() {
         Serial.println("melodies number: " + line);
         break;
       case 5:
-        pin = line;
+        pin = line.toInt();
         Serial.println("pin: " + line);
         break;
       case 6:
@@ -774,7 +787,7 @@ void setup() {
 
   if (readProjectInformations()) {
     File file = SPIFFS.open("system_info,txt", "r");
-    if (!connectToWifi() && !setupFirestore() && file.size() > 0) {
+    if (!connectToWifi() || !setupFirestore() || file.size() > 0) {
       startAccessPoint();
     } else {
       setupNTP();   // Network Time Protocol
@@ -848,31 +861,7 @@ void loop() {
       // Should run the Create_Documents.ino prior to test this example to create the documents in the collection Id at a0/b0/c0
 
       // a0 is the collection id, b0 is the document id in collection a0 and c0 is the collection id id in the document b0.
-      String collectionId = "systems/KkEsJ6nVzUb4SSZhLANG/events";
-
-      // If the collection Id path contains space e.g. "a b/c d/e f"
-      // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
-
-      Serial.println("List the documents in a collection... ");
-
-      ListDocumentsOptions listDocsOptions;
-      listDocsOptions.pageSize(100);
-
-      String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
-
-      if (aClient.lastError().code() == 0)
-        Serial.println(payload);
-      else
-        printError(aClient.lastError().code(), aClient.lastError().message());
-    }
-
-    if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0)) {
-      dataMillis = millis();
-
-      // Should run the Create_Documents.ino prior to test this example to create the documents in the collection Id at a0/b0/c0
-
-      // a0 is the collection id, b0 is the document id in collection a0 and c0 is the collection id id in the document b0.
-      String collectionId = "systems/KkEsJ6nVzUb4SSZhLANG/events";
+      String collectionId = "systems/"+ systemId + "/events";
 
       // If the collection Id path contains space e.g. "a b/c d/e f"
       // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
