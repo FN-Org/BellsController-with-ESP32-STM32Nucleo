@@ -36,6 +36,23 @@
 #define BUFFER_SIZE 1024
 #define MAX_EVENTS 100
 #define MAX_STRING_SIZE 100
+
+// Defining note frequency //
+
+// Concert in C (DO)
+#define NOTE_C4  262
+#define NOTE_D4  294
+#define NOTE_E4  330
+#define NOTE_F4  349
+#define NOTE_G4  392
+
+// Concert in A (LA)
+#define NOTE_A3  220
+#define NOTE_B3  247
+#define NOTE_Db4 277
+// + NOTE_D4 (already defined)
+// + NOTE_E4 (already defined)
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -204,7 +221,7 @@ int main(void)
    {
 	   send_uart_message(events[i].melodyName);
 	   send_uart_message("\n");
-	   sprintf(buf, "%d\r\n", events[i].melodyNumber);
+	   sprintf(buf, "%i\r\n", events[i].melodyNumber);
 	   send_uart_message(buf);
 	   send_uart_message(events[i].time);
 	   send_uart_message("\n");
@@ -372,7 +389,7 @@ void process_json_message(const char *event) {
 			// Melody number
 			cJSON *melodyNumber = cJSON_GetObjectItemCaseSensitive(fields, "melodyNumber");
 			cJSON *melodyNumberValue = cJSON_GetObjectItemCaseSensitive(melodyNumber, "integerValue");
-			if (cJSON_IsNumber(melodyNumberValue))
+			if (cJSON_IsString(melodyNumberValue) && melodyNumberValue->valuestring != NULL)
 			{
 				melodyNumberInt = atoi(melodyNumberValue->valuestring);
 			}

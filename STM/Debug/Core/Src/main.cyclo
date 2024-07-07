@@ -3,5 +3,5 @@
 ../Core/Src/main.c:277:13:MX_USART2_UART_Init	2
 ../Core/Src/main.c:310:13:MX_GPIO_Init	1
 ../Core/Src/main.c:324:6:send_uart_message	1
-../Core/Src/main.c:332:6:process_json_message	11
+../Core/Src/main.c:332:6:process_json_message	12
 ../Core/Src/main.c:418:6:Error_Handler	1
