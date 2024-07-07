@@ -47,8 +47,7 @@
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-char rxBuffer[BUFFER_SIZE];
-volatile int rxIndex = 0;
+char buf[BUFFER_SIZE];
 
 typedef struct {
     char melodyName[MAX_STRING_SIZE];
@@ -201,14 +200,15 @@ int main(void)
   // Simulate receiving JSON message
    process_json_message(jsonEx);
 
-      // Print out the events parsed
-   	   send_uart_message("Events parsed:\n");
-          for (int i = 0; i < eventCount; i++) {
-        	  send_uart_message("Event %d:\n", i + 1);
-        	  send_uart_message("  Melody Name: %s\n", events[i].melodyName);
-        	  send_uart_message("  Melody Number: %d\n", events[i].melodyNumber);
-        	  send_uart_message("  Time: %s\n", events[i].time);
-          }
+   for (int i = 0; i < eventCount; i++)
+   {
+	   send_uart_message(events[i].melodyName);
+	   send_uart_message("\n");
+	   sprintf(buf, "%d\r\n", events[i].melodyNumber);
+	   send_uart_message(buf);
+	   send_uart_message(events[i].time);
+	   send_uart_message("\n");
+   }
 
   /* USER CODE END 2 */
 
@@ -329,54 +329,84 @@ void send_uart_message(char *message) {
  * @brief Parse and save the event in the array
  * @param message, pointer to the string parsed as a json
  */
-void process_json_message(const char *message) {
-    cJSON *json = cJSON_Parse(message);
-    if (json == NULL) {
-        // JSON parsing failed
-        return;
+void process_json_message(const char *event) {
+	const cJSON *documents = NULL;
+	const cJSON *document = NULL;
+	const cJSON *fields = NULL;
+	const cJSON *field = NULL;
+    cJSON *event_json = cJSON_Parse(event);
+    if (event_json == NULL)
+    {
+        const char *error_ptr = cJSON_GetErrorPtr();
+        if (error_ptr != NULL)
+        {
+            fprintf(stderr, "Error before: %s\n", error_ptr);
+        }
+        goto end;
     }
 
-    // Get the "documents" array
-    cJSON *documents = cJSON_GetObjectItem(json, "documents");
-    if (documents == NULL || !cJSON_IsArray(documents)) {
-        // No valid "documents" array found
-        cJSON_Delete(json);
-        return;
-    }
+    char *string = cJSON_Print(event_json);
+    // send_uart_message(string);
 
-    int arraySize = cJSON_GetArraySize(documents);
-    for (int i = 0; i < arraySize; i++) {
-        cJSON *eventObj = cJSON_GetArrayItem(documents, i);
-        if (eventObj == NULL || !cJSON_IsObject(eventObj)) {
-            continue; // Skip if not a valid object
-        }
+    documents = cJSON_GetObjectItemCaseSensitive(event_json, "documents");
+        cJSON_ArrayForEach(document, documents)
+        {
+            fields = cJSON_GetObjectItemCaseSensitive(document, "fields");
 
-        // Extract fields from the event object
-        cJSON *fields = cJSON_GetObjectItem(eventObj, "fields");
-        if (fields == NULL || !cJSON_IsObject(fields)) {
-            continue; // Skip if no valid "fields" object
-        }
+            char melodyNameString[MAX_STRING_SIZE] = {0};
+			int melodyNumberInt = 0;
+			char timeString[MAX_STRING_SIZE] = {0};
 
-        cJSON *melodyNameObj = cJSON_GetObjectItem(fields, "melodyName");
-        cJSON *melodyNumberObj = cJSON_GetObjectItem(fields, "melodyNumber");
-        cJSON *timeObj = cJSON_GetObjectItem(fields, "time");
+            // Melody name
+            cJSON *melodyName = cJSON_GetObjectItemCaseSensitive(fields, "melodyName");
+			cJSON *melodyNameValue = cJSON_GetObjectItemCaseSensitive(melodyName, "stringValue");
+			if (cJSON_IsString(melodyNameValue) && melodyNameValue->valuestring != NULL)
+			{
+				strncpy(melodyNameString, melodyNameValue->valuestring, MAX_STRING_SIZE - 1);
+			}
 
-        if (cJSON_IsString(melodyNameObj) && cJSON_IsNumber(melodyNumberObj) && cJSON_IsString(timeObj)) {
-            // Create a new event
-            Event newEvent;
-            strncpy(newEvent.melodyName, melodyNameObj->valuestring, MAX_STRING_SIZE);
-            newEvent.melodyNumber = melodyNumberObj->valueint;
-            strncpy(newEvent.time, timeObj->valuestring, MAX_STRING_SIZE);
+            send_uart_message("Melody name: ");
+            send_uart_message(cJSON_Print(melodyNameValue));
+            send_uart_message("\n");
 
-            // Add the event to the array if there's space
-            if (eventCount < MAX_EVENTS) {
-                events[eventCount++] = newEvent;
+			// Melody number
+			cJSON *melodyNumber = cJSON_GetObjectItemCaseSensitive(fields, "melodyNumber");
+			cJSON *melodyNumberValue = cJSON_GetObjectItemCaseSensitive(melodyNumber, "integerValue");
+			if (cJSON_IsNumber(melodyNumberValue))
+			{
+				melodyNumberInt = atoi(melodyNumberValue->valuestring);
+			}
+
+            send_uart_message("Melody number: ");
+            send_uart_message(cJSON_Print(melodyNumberValue));
+            send_uart_message("\n");
+
+			// Time
+            cJSON *time = cJSON_GetObjectItemCaseSensitive(fields, "time");
+            cJSON *timeValue = cJSON_GetObjectItemCaseSensitive(time, "timestampValue");
+
+            if (cJSON_IsString(timeValue) && timeValue->string != NULL)
+            {
+            	strncpy(timeString, timeValue->valuestring, MAX_STRING_SIZE - 1);
             }
-        }
-    }
 
-    // Free JSON object
-    cJSON_Delete(json);
+            send_uart_message("Time: ");
+            send_uart_message(cJSON_Print(timeValue));
+            send_uart_message("\n");
+
+            // Create an event and add it to the array
+			if (eventCount < MAX_EVENTS)
+			{
+				strncpy(events[eventCount].melodyName, melodyNameString, MAX_STRING_SIZE - 1);
+				events[eventCount].melodyNumber = melodyNumberInt;
+				strncpy(events[eventCount].time, timeString, MAX_STRING_SIZE - 1);
+				eventCount++;
+			}
+        }
+
+    end:
+        cJSON_Delete(event_json);
+        return;
 }
 
 /* USER CODE END 4 */
