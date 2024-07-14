@@ -24,6 +24,9 @@
 
 // JSON
 #include <ArduinoJson.h>
+
+//vector
+#include <vector>
 //########################################################################################
 
 
@@ -38,12 +41,16 @@
 String API_KEY = "";
 String FIREBASE_PROJECT_ID = "";
 
+//Global variables for connecting to the cloud storage (stored in /project_info.txt)
+String STORAGE_BUCKET_ID = "";
+
 // Global variables for the firebase library
 WiFiClientSecure ssl_client;
 DefaultNetwork network;  // initilize with boolean parameter to enable/disable network reconnection
 using AsyncClient = AsyncClientClass;
 AsyncClient aClient(ssl_client, getNetwork(network));
 Firestore::Documents Docs;
+Storage storage;
 AsyncResult aResult_no_callback;
 FirebaseApp app;
 
@@ -70,6 +77,7 @@ String location = "";
 int bellsNum = 0;
 int melodiesNum = 0;
 int pin = 0;
+std::vector<String> melodiesNames;
 
 String userUid = "";
 
@@ -78,6 +86,7 @@ bool verified = false;
 unsigned long dataMillis = 0;
 bool taskCompleted = false;
 bool first_time = true;
+bool setupCompleted = false;
 
 // Global variables for the time
 // Set time zone (UTC+1 for Italy)
@@ -144,8 +153,6 @@ void handleSystemForm() {
                     "<form action=\"/second_submit\" method=\"post\">"
                     "<label for=\"num_campane\">Numero Campane:</label><br>"
                     "<input type=\"number\" id=\"num_campane\" name=\"num_campane\" required><br>"
-                    "<label for=\"num_melodie\">Numero Melodie:</label><br>"
-                    "<input type=\"number\" id=\"num_melodie\" name=\"num_melodie\" required><br>"
                     "<label for=\"name\">Name:</label><br>"
                     "<input type=\"text\" id=\"name\" name=\"name\" required><br>"
                     "<label for=\"location\">Location:</label><br>"
@@ -176,7 +183,7 @@ void saveCredentials(const String& ssid, const String& wifi_password, const Stri
   file.close();
 }
 
-void saveSystemInfo(const String& name, const String& location, const int& bNum, const int& mNum, const int& pin) {
+void saveSystemInfo(const String& name, const String& location, const int& bNum, const int& pin) {
   File file = SPIFFS.open("/system_info.txt", "w");
   if (!file) {
     Serial.println("Failed to open file for writing");
@@ -186,7 +193,6 @@ void saveSystemInfo(const String& name, const String& location, const int& bNum,
   file.println(name);
   file.println(location);
   file.println(bNum);
-  file.println(mNum);
   file.println(pin);
   file.close();
 }
@@ -251,19 +257,17 @@ void handleCredentialsSubmit() {
 
 void handleSystemSubmit() {
   bellsNum = server.arg("num_campane").toInt();
-  melodiesNum = server.arg("num_melodie").toInt();
   name = server.arg("name");
   location = server.arg("location");
   pin = server.arg("pin").toInt();
 
   // Save details (implement saveDetails function as needed)
-  saveSystemInfo(name, location, bellsNum, melodiesNum, pin);
+  saveSystemInfo(name, location, bellsNum, pin);
 
   // Print details for debugging
   Serial.println("Name: " + name);
   Serial.println("Location: " + location);
   Serial.println("Numero Campane: " + String(bellsNum));
-  Serial.println("Numero Melodie: " + String(melodiesNum));
   Serial.println("PIN: " + String(pin));
 
   server.send(200, "text/html", "Details received. Thank you!");
@@ -356,7 +360,7 @@ bool connectToWifi() {
 * @brief Function to handle the set up of the connection to the firestore cloud database service
 * 
 */
-bool setupFirestore() {
+bool setupFirebase() {
   Firebase.printf("Firebase Client v%s\n", FIREBASE_CLIENT_VERSION);
   UserAuth user_auth(API_KEY, email, account_password);
   Serial.println("Initializing app...");
@@ -365,17 +369,19 @@ bool setupFirestore() {
 
   ssl_client.setInsecure();
 
-  authHandler();
-
   Serial.println("Sono qui 2");
 
+  authHandler();
   // Binding the FirebaseApp for authentication handler.
   // To unbind, use Docs.resetApp();
   initializeApp(aClient, app, getAuth(user_auth), aResult_no_callback);
 
+  
+
   Serial.println("Sono qui 3");
 
   app.getApp<Firestore::Documents>(Docs);
+  app.getApp<Storage>(storage);
 
   Serial.println("Sono qui 4");
 
@@ -391,6 +397,8 @@ bool setupFirestore() {
   
   return verified;
 }
+
+
 
 
 /*
@@ -516,6 +524,16 @@ void ReceiveandSaveProjectInformations() {
   }
   Serial.print("FIREBASE_PROJECT_ID= " + FIREBASE_PROJECT_ID);
 
+  // Read the Firebase BUCKET ID from serial
+  Serial.print("Enter STORAGE_BUCKET_ID: ");
+  while (STORAGE_BUCKET_ID == "") {
+    if (Serial.available()) {
+      STORAGE_BUCKET_ID = Serial.readStringUntil('\n');
+      ssid.trim();
+    }
+  }
+  Serial.print("STORAGE_BUCKET_ID= " + STORAGE_BUCKET_ID);
+
   // Save the information read in the SPIFFS
   File file = SPIFFS.open("/project_info.txt", "w");
   if (!file) {
@@ -524,6 +542,7 @@ void ReceiveandSaveProjectInformations() {
   }
   file.println(API_KEY);
   file.println(FIREBASE_PROJECT_ID);
+  file.println(STORAGE_BUCKET_ID);
   file.close();
 
   // Reboot the ESP
@@ -560,6 +579,14 @@ bool readProjectInformations() {
     }
     Serial.println("FIREBASE_PROJECT_ID read = " + FIREBASE_PROJECT_ID);
 
+    STORAGE_BUCKET_ID = file.readStringUntil('\n');
+    STORAGE_BUCKET_ID.trim();
+    if (STORAGE_BUCKET_ID == "") {
+      Serial.println("STORAGE_BUCKET_ID is empty!");
+      return false;
+    }
+    Serial.println("STORAGE_BUCKET_ID read = " + STORAGE_BUCKET_ID);
+
     return true;
   } else {
     Serial.println("The file project_info.txt does not exists");
@@ -576,7 +603,7 @@ void setupNTP() {
 }
 
 void setupUART() {
-  Serial2.begin(115200);
+  Serial2.begin(115200, SERIAL_8N1, 16, 17);
 }
 
 void currentTimeSending() {
@@ -743,14 +770,10 @@ void readSystemInfo() {
         Serial.println("bells number: " + line);
         break;
       case 4:
-        melodiesNum = line.toInt();
-        Serial.println("melodies number: " + line);
-        break;
-      case 5:
         pin = line.toInt();
         Serial.println("pin: " + line);
         break;
-      case 6:
+      case 5:
         systemId = line;
         Serial.println("system id: " + line);
         break;
@@ -760,6 +783,86 @@ void readSystemInfo() {
   }
   file.close();
 }
+
+void fetchMelodies(){
+  Serial.println("Get all files...");
+
+
+  String startingPath = "melodies/"+ String(bellsNum) + "/";
+
+  int cnt = 1;
+  bool result = true;
+
+  String path = startingPath + String(cnt) + ".txt";
+
+  String buff = "buf.txt";
+
+  FileConfig media_file(buff,fileCallback);
+  
+  while(result){
+    Serial.print("Count");
+    Serial.println(cnt);
+    path = startingPath + String(cnt)+".txt";
+    result = storage.download(aClient, FirebaseStorage::Parent(STORAGE_BUCKET_ID, path), getFile(media_file));
+    
+    cnt++;
+    if (result){
+      Serial.println("Object downloaded.");
+      readAndSendBuffer(cnt);
+    }
+    else
+          printError(aClient.lastError().code(), aClient.lastError().message());
+  }
+}
+
+void fileCallback(File &file, const char *filename, file_operating_mode mode){
+    // FILE_OPEN_MODE_READ, FILE_OPEN_MODE_WRITE and FILE_OPEN_MODE_APPEND are defined in this library
+    // MY_FS is defined in this example
+
+    Serial.print("Mode:");
+    Serial.println(mode);
+    Serial.print("Name:");
+    Serial.println(filename);
+    switch (mode)
+    {
+    case file_mode_open_read:
+        file = SPIFFS.open(filename, FILE_OPEN_MODE_READ);
+        break;
+    case file_mode_open_write:
+        file = SPIFFS.open(filename, FILE_OPEN_MODE_WRITE);
+        break;
+    case file_mode_open_append:
+        file = SPIFFS.open(filename, FILE_OPEN_MODE_APPEND);
+        break;
+    case file_mode_remove:
+        SPIFFS.remove(filename);
+        break;
+    default:
+        break;
+    }
+
+}
+
+void readAndSendBuffer(int cnt){
+  File testFile = SPIFFS.open("/buf.txt","r");
+  if (!testFile){
+    Serial.println("File /buf.txt doesn't exists!");
+    return;
+  }
+  String melodyTitle = testFile.readStringUntil('\n');
+  Serial2.println("-M-");
+  Serial2.println(melodyTitle);
+  Serial.println(melodyTitle);
+  String line;
+  melodiesNames.push_back(melodyTitle);
+  while(testFile.available()){
+    line = testFile.readStringUntil('\n');
+    Serial2.println(line);
+    delay(10);
+  }
+  Serial2.println("---");
+}
+
 //#########################################################################################################
 
 
@@ -787,9 +890,11 @@ void setup() {
 
   if (readProjectInformations()) {
     File file = SPIFFS.open("system_info,txt", "r");
-    if (!connectToWifi() || !setupFirestore() || file.size() > 0) {
+    if (!connectToWifi() || !setupFirebase() || file.size() > 0) {
+      setupCompleted = false;
       startAccessPoint();
     } else {
+      setupCompleted = true;
       setupNTP();   // Network Time Protocol
       setupUART();  // Universal Asynchronous Receiver-Transmitter (seriale)
     }
@@ -808,12 +913,13 @@ void setup() {
 //LOOP//
 void loop() {
 
-  if (WiFi.status() == WL_CONNECTED) {
+  if (WiFi.status() == WL_CONNECTED && setupCompleted ) {
 
     authHandler();
 
     app.loop();
     Docs.loop();
+    storage.loop();
 
     if (first_time && app.ready() && app.isInitialized()) {
       Serial.println("User verified:");
@@ -825,6 +931,7 @@ void loop() {
 
       readSystemInfo();  // It reads the system information from the file in the SPIFFS (system_info.txt)
 
+      fetchMelodies();
       // Usiamo systemId nella create document, che la prendiamo dal file. se è vuota ok e se invece non è vuota dovrebbe darci errore.
 
       // Si aggiunge come parametro delle funzioni il sistem ID.
@@ -873,8 +980,10 @@ void loop() {
 
       String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
 
-      if (aClient.lastError().code() == 0)
-        Serial.println(payload);
+      if (aClient.lastError().code() == 0){
+        Serial.println("sending events...");
+        Serial2.println(payload);
+      }
       else
         printError(aClient.lastError().code(), aClient.lastError().message());
     }
