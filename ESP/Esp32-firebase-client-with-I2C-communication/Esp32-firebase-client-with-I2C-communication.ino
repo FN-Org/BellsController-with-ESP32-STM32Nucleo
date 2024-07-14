@@ -376,7 +376,7 @@ bool setupFirebase() {
   // To unbind, use Docs.resetApp();
   initializeApp(aClient, app, getAuth(user_auth), aResult_no_callback);
 
-  
+
 
   Serial.println("Sono qui 3");
 
@@ -394,7 +394,7 @@ bool setupFirebase() {
   verified = verifyUser(API_KEY, email, account_password);
 
   Serial.println("Sono qui 6: " + String(verified));
-  
+
   return verified;
 }
 
@@ -733,8 +733,7 @@ bool createSystemDocument() {
         return false;  // For fail
       }
     }
-  }
-  catch (std::exception& e) {
+  } catch (std::exception& e) {
     Serial.print("Exception caught: ");
     Serial.println(e.what());
     // Handle the exception as needed
@@ -784,11 +783,11 @@ void readSystemInfo() {
   file.close();
 }
 
-void fetchMelodies(){
+void fetchMelodies() {
   Serial.println("Get all files...");
 
 
-  String startingPath = "melodies/"+ String(bellsNum) + "/";
+  String startingPath = "melodies/" + String(bellsNum) + "/";
 
   int cnt = 1;
   bool result = true;
@@ -797,72 +796,100 @@ void fetchMelodies(){
 
   String buff = "buf.txt";
 
-  FileConfig media_file(buff,fileCallback);
-  
-  while(result){
+  FileConfig media_file(buff, fileCallback);
+
+  while (result) {
     Serial.print("Count");
     Serial.println(cnt);
-    path = startingPath + String(cnt)+".txt";
+    path = startingPath + String(cnt) + ".txt";
     result = storage.download(aClient, FirebaseStorage::Parent(STORAGE_BUCKET_ID, path), getFile(media_file));
-    
+
     cnt++;
-    if (result){
+    if (result) {
       Serial.println("Object downloaded.");
       readAndSendBuffer(cnt);
-    }
-    else
-          printError(aClient.lastError().code(), aClient.lastError().message());
+    } else
+      printError(aClient.lastError().code(), aClient.lastError().message());
   }
 }
 
-void fileCallback(File &file, const char *filename, file_operating_mode mode){
-    // FILE_OPEN_MODE_READ, FILE_OPEN_MODE_WRITE and FILE_OPEN_MODE_APPEND are defined in this library
-    // MY_FS is defined in this example
+void fileCallback(File& file, const char* filename, file_operating_mode mode) {
+  // FILE_OPEN_MODE_READ, FILE_OPEN_MODE_WRITE and FILE_OPEN_MODE_APPEND are defined in this library
+  // MY_FS is defined in this example
 
-    Serial.print("Mode:");
-    Serial.println(mode);
-    Serial.print("Name:");
-    Serial.println(filename);
-    switch (mode)
-    {
+  Serial.print("Mode:");
+  Serial.println(mode);
+  Serial.print("Name:");
+  Serial.println(filename);
+  switch (mode) {
     case file_mode_open_read:
-        file = SPIFFS.open(filename, FILE_OPEN_MODE_READ);
-        break;
+      file = SPIFFS.open(filename, FILE_OPEN_MODE_READ);
+      break;
     case file_mode_open_write:
-        file = SPIFFS.open(filename, FILE_OPEN_MODE_WRITE);
-        break;
+      file = SPIFFS.open(filename, FILE_OPEN_MODE_WRITE);
+      break;
     case file_mode_open_append:
-        file = SPIFFS.open(filename, FILE_OPEN_MODE_APPEND);
-        break;
+      file = SPIFFS.open(filename, FILE_OPEN_MODE_APPEND);
+      break;
     case file_mode_remove:
-        SPIFFS.remove(filename);
-        break;
+      SPIFFS.remove(filename);
+      break;
     default:
-        break;
-    }
-
+      break;
+  }
 }
 
-void readAndSendBuffer(int cnt){
-  File testFile = SPIFFS.open("/buf.txt","r");
-  if (!testFile){
+void readAndSendBuffer(int cnt) {
+  File testFile = SPIFFS.open("/buf.txt", "r");
+  if (!testFile) {
     Serial.println("File /buf.txt doesn't exists!");
     return;
   }
-  String melodyTitle = testFile.readStringUntil('\n');
+  Serial2.println("---");
+  delay(100);
   Serial2.println("-M-");
+  delay(100);
+
+  String melodyTitle = testFile.readStringUntil('\n');
+  melodyTitle.trim();
   Serial2.println(melodyTitle);
   Serial.println(melodyTitle);
-  String line;
   melodiesNames.push_back(melodyTitle);
-  while(testFile.available()){
+  delay(100);
+  String line;
+  while (testFile.available()) {
     line = testFile.readStringUntil('\n');
+    line.trim();
     Serial2.println(line);
-    delay(10);
+    delay(100);
   }
   Serial2.println("---");
 }
 
+
+
+
+String removeSpacesAndNewlines(String str) {
+  String result = "";
+  for (int i = 0; i < str.length(); i++) {
+    char c = str.charAt(i);
+    if (c != ' ' && c != '\n' && c != '\r') {
+      result += c;
+    }
+  }
+  return result;
+}
+
+void sendPackets(int size, String string) {
+  int packetSize = size - 1;  // 1023 caratteri + 1 per \n
+  for (int i = 0; i < string.length(); i += packetSize) {
+    String packet = string.substring(i, i + packetSize);
+    packet += "\n";  // Aggiungi un nuovo fine linea alla fine del pacchetto
+    delay(100);
+    Serial2.print(packet);
+  }
+  delay(100);
+}
 //#########################################################################################################
 
 
@@ -913,7 +940,7 @@ void setup() {
 //LOOP//
 void loop() {
 
-  if (WiFi.status() == WL_CONNECTED && setupCompleted ) {
+  if (WiFi.status() == WL_CONNECTED && setupCompleted) {
 
     authHandler();
 
@@ -968,7 +995,7 @@ void loop() {
       // Should run the Create_Documents.ino prior to test this example to create the documents in the collection Id at a0/b0/c0
 
       // a0 is the collection id, b0 is the document id in collection a0 and c0 is the collection id id in the document b0.
-      String collectionId = "systems/"+ systemId + "/events";
+      String collectionId = "systems/" + systemId + "/events";
 
       // If the collection Id path contains space e.g. "a b/c d/e f"
       // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
@@ -980,11 +1007,21 @@ void loop() {
 
       String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
 
-      if (aClient.lastError().code() == 0){
+
+
+      if (aClient.lastError().code() == 0) {
         Serial.println("sending events...");
-        Serial2.println(payload);
-      }
-      else
+
+        String payloadCleaned = removeSpacesAndNewlines(payload);
+
+        Serial2.println("---");
+        delay(100);
+        Serial2.println("-E-");
+
+        sendPackets(1024, payloadCleaned);
+
+        Serial2.println("---");
+      } else
         printError(aClient.lastError().code(), aClient.lastError().message());
     }
 
