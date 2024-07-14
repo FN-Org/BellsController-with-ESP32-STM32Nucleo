@@ -98,6 +98,8 @@ const int daylightOffset_sec = 3600;  // Ora legale
 // JSON
 #define JSON_BUFFER_SIZE 256
 
+#define default_Nmelodies 0
+
 unsigned long last_time_sent = 0;
 //###################################################################################################
 
@@ -183,7 +185,7 @@ void saveCredentials(const String& ssid, const String& wifi_password, const Stri
   file.close();
 }
 
-void saveSystemInfo(const String& name, const String& location, const int& bNum, const int& pin) {
+void saveSystemInfo(const String& name, const String& location, const int& bNum, const int& mNum, const int& pin) {
   File file = SPIFFS.open("/system_info.txt", "w");
   if (!file) {
     Serial.println("Failed to open file for writing");
@@ -193,6 +195,7 @@ void saveSystemInfo(const String& name, const String& location, const int& bNum,
   file.println(name);
   file.println(location);
   file.println(bNum);
+  file.println(mNum);
   file.println(pin);
   file.close();
 }
@@ -262,7 +265,7 @@ void handleSystemSubmit() {
   pin = server.arg("pin").toInt();
 
   // Save details (implement saveDetails function as needed)
-  saveSystemInfo(name, location, bellsNum, pin);
+  saveSystemInfo(name, location, bellsNum, default_Nmelodies, pin);
 
   // Print details for debugging
   Serial.println("Name: " + name);
@@ -665,7 +668,7 @@ bool createSystemDocument() {
   Serial.println("Percorso del documento: " + doc_path);
 
   Values::IntegerValue bellsV(bellsNum);
-  Values::IntegerValue melodiesV(melodiesNum);
+  Values::IntegerValue melodiesV(default_Nmelodies);
   Values::StringValue nameV(name);
   Values::StringValue locationV(location);
   Values::IntegerValue pinV(pin);
@@ -769,10 +772,14 @@ void readSystemInfo() {
         Serial.println("bells number: " + line);
         break;
       case 4:
+        melodiesNum = line.toInt();
+        Serial.println("melodies number: " + line);
+        break;
+      case 5:
         pin = line.toInt();
         Serial.println("pin: " + line);
         break;
-      case 5:
+      case 6:
         systemId = line;
         Serial.println("system id: " + line);
         break;
@@ -882,153 +889,221 @@ String removeSpacesAndNewlines(String str) {
 
 void sendPackets(int size, String string) {
   int packetSize = size - 1;  // 1023 caratteri + 1 per \n
+  Serial.println(string.length());
   for (int i = 0; i < string.length(); i += packetSize) {
     String packet = string.substring(i, i + packetSize);
     packet += "\n";  // Aggiungi un nuovo fine linea alla fine del pacchetto
     delay(100);
+    Serial.println(packet);
+    Serial.println(i);
     Serial2.print(packet);
   }
   delay(100);
 }
-//#########################################################################################################
 
+void updateMelodies() {
 
+  String starting_path = "systems/" + systemId + "/melodies/";
 
+  String path = starting_path;
 
+  for (int i = 0; i < melodiesNames.size(); i++) {
 
+    path = starting_path + melodiesNames[i];
+    Serial.println("Create document: " + path);
+    Values::IntegerValue num(i + 1);
+    Values::StringValue name(melodiesNames[i]);
 
+    Document<Values::Value> doc("name", Values::Value(name));
+    doc.add("number", Values::Value(num));
 
+    String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), path, DocumentMask(), doc);
 
+    if (aClient.lastError().code() == 0) {
+      Serial.println("Created doc " + path + "with success");
+      //send to the stm32
+    } else {
+      printError(aClient.lastError().code(), aClient.lastError().message());
+    }
+  }
 
-
-//#########################################################################################################
-//SETUP//
-void setup() {
-  Serial.begin(115200);
-
-  Serial.println("Mounting SPIFF...");
-  if (!SPIFFS.begin(true)) {
-    Serial.println("An Error has occurred while mounting SPIFFS");
+  //update the SPIFFS
+  saveSystemInfo(name, location, bellsNum, melodiesNum, pin);
+  File file = SPIFFS.open("/system_info.txt", "a");
+  if (!file) {
+    Serial.println("Failed to open file for appending");
     return;
   }
+  file.println(systemId);
+  file.close();
 
-  WiFi.disconnect(true);  // This line will clear any previous WiFi configurations
-  delay(1000);
+  //update the firestore db
+  path = "systems/" + systemId;
+  Values::IntegerValue nMelodies(melodiesNum);
+  Document<Values::Value> update("nMelodies", Values::Value(nMelodies));
 
-  if (readProjectInformations()) {
-    File file = SPIFFS.open("system_info,txt", "r");
-    if (!connectToWifi() || !setupFirebase() || file.size() > 0) {
-      setupCompleted = false;
-      startAccessPoint();
-    } else {
-      setupCompleted = true;
-      setupNTP();   // Network Time Protocol
-      setupUART();  // Universal Asynchronous Receiver-Transmitter (seriale)
-    }
+  PatchDocumentOptions patchOptions(DocumentMask("nMelodies"), DocumentMask(), Precondition());
+
+  // You can set the content of doc object directly with doc.setContent("your content")
+  String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), path, patchOptions, update);
+
+  if (aClient.lastError().code() == 0) {
+    Serial.println("Update of the melodies number on the db successful");
   } else {
-    ReceiveandSaveProjectInformations();
+    printError(aClient.lastError().code(), aClient.lastError().message());
   }
 }
-//#########################################################################################################################
+
+  //#########################################################################################################
 
 
 
 
 
 
-//#########################################################################################################################
-//LOOP//
-void loop() {
 
-  if (WiFi.status() == WL_CONNECTED && setupCompleted) {
 
-    authHandler();
 
-    app.loop();
-    Docs.loop();
-    storage.loop();
 
-    if (first_time && app.ready() && app.isInitialized()) {
-      Serial.println("User verified:");
-      Serial.println(verified);
-      first_time = !first_time;
+  //#########################################################################################################
+  //SETUP//
+  void setup() {
+    Serial.begin(115200);
 
-      userUid = app.getUid();
-      Serial.println("User UID in the loop: " + userUid);
+    Serial.println("Mounting SPIFF...");
+    if (!SPIFFS.begin(true)) {
+      Serial.println("An Error has occurred while mounting SPIFFS");
+      return;
+    }
 
-      readSystemInfo();  // It reads the system information from the file in the SPIFFS (system_info.txt)
+    WiFi.disconnect(true);  // This line will clear any previous WiFi configurations
+    delay(1000);
 
-      fetchMelodies();
-      // Usiamo systemId nella create document, che la prendiamo dal file. se è vuota ok e se invece non è vuota dovrebbe darci errore.
+    if (readProjectInformations()) {
+      File file = SPIFFS.open("/system_info.txt", "r");
 
-      // Si aggiunge come parametro delle funzioni il sistem ID.
-      // Durante la prima accensione si da ID = 0, almeno crea un ID automatico.
-      if (createSystemDocument()) {
-        if (linkUser()) {
-          Serial.println("Fatto LINKUSER");
-          // Save the db information in the system_info.txt
-          File file = SPIFFS.open("/system_info.txt", "a");
-          if (!file) {
-            Serial.println("Failed to open file for appending");
-            return;
+      if (!connectToWifi() || !setupFirebase() || file.size() <= 0) {
+        setupCompleted = false;
+        Serial.println(file.size());
+        startAccessPoint();
+      } else {
+        setupCompleted = true;
+        setupNTP();   // Network Time Protocol
+        setupUART();  // Universal Asynchronous Receiver-Transmitter (seriale)
+      }
+    } else {
+      ReceiveandSaveProjectInformations();
+    }
+  }
+  //#########################################################################################################################
+
+
+
+
+
+
+  //#########################################################################################################################
+  //LOOP//
+  void loop() {
+
+    if (WiFi.status() == WL_CONNECTED && setupCompleted) {
+
+      authHandler();
+
+      app.loop();
+      Docs.loop();
+      storage.loop();
+
+      if (first_time && app.ready() && app.isInitialized()) {
+        Serial.println("User verified:");
+        Serial.println(verified);
+        first_time = !first_time;
+
+        userUid = app.getUid();
+        Serial.println("User UID in the loop: " + userUid);
+
+        readSystemInfo();  // It reads the system information from the file in the SPIFFS (system_info.txt)
+
+        // Usiamo systemId nella create document, che la prendiamo dal file. se è vuota ok e se invece non è vuota dovrebbe darci errore.
+
+        // Si aggiunge come parametro delle funzioni il sistem ID.
+        // Durante la prima accensione si da ID = 0, almeno crea un ID automatico.
+        if (createSystemDocument()) {
+          if (linkUser()) {
+            Serial.println("Fatto LINKUSER");
+            // Save the db information in the system_info.txt
+            File file = SPIFFS.open("/system_info.txt", "a");
+            if (!file) {
+              Serial.println("Failed to open file for appending");
+              return;
+            }
+            Serial.println("Aperto file in append");
+            file.println(systemId);
+            file.close();
+            Serial.println("Variables written in the SPIFFS");
+          } else {
+            Serial.println("Document already existed or error occurred.");
           }
-          Serial.println("Aperto file in append");
-          file.println(systemId);
-          file.close();
-          Serial.println("Variables written in the SPIFFS");
         } else {
           Serial.println("Document already existed or error occurred.");
         }
-      } else {
-        Serial.println("Document already existed or error occurred.");
+
+        fetchMelodies();
+
+        if (melodiesNum < melodiesNames.size()) {
+          melodiesNum = melodiesNames.size();
+          updateMelodies();
+        }
+
+
+        // Qui invece si dà il vero systemId che si prende dallo SPIFFS
+        // (e magari si salva coem variabile globale)
+        // Si vanno a creare i documenti con quell'ID, se esistono già mi aspetto
+        // che il DB si arrabbi e che me lo faccia sapere in qualche modo
       }
 
-      // Qui invece si dà il vero systemId che si prende dallo SPIFFS
-      // (e magari si salva coem variabile globale)
-      // Si vanno a creare i documenti con quell'ID, se esistono già mi aspetto
-      // che il DB si arrabbi e che me lo faccia sapere in qualche modo
-    }
+      if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0)) {
+        dataMillis = millis();
 
-    if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0)) {
-      dataMillis = millis();
+        // Should run the Create_Documents.ino prior to test this example to create the documents in the collection Id at a0/b0/c0
 
-      // Should run the Create_Documents.ino prior to test this example to create the documents in the collection Id at a0/b0/c0
+        // a0 is the collection id, b0 is the document id in collection a0 and c0 is the collection id id in the document b0.
+        String collectionId = "systems/" + systemId + "/events";
 
-      // a0 is the collection id, b0 is the document id in collection a0 and c0 is the collection id id in the document b0.
-      String collectionId = "systems/" + systemId + "/events";
+        // If the collection Id path contains space e.g. "a b/c d/e f"
+        // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
 
-      // If the collection Id path contains space e.g. "a b/c d/e f"
-      // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
+        Serial.println("List the documents in a collection... ");
 
-      Serial.println("List the documents in a collection... ");
+        ListDocumentsOptions listDocsOptions;
+        listDocsOptions.pageSize(100);
 
-      ListDocumentsOptions listDocsOptions;
-      listDocsOptions.pageSize(100);
-
-      String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
+        String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
 
 
 
-      if (aClient.lastError().code() == 0) {
-        Serial.println("sending events...");
+        if (aClient.lastError().code() == 0) {
+          Serial.println("sending events...");
 
-        String payloadCleaned = removeSpacesAndNewlines(payload);
+          String payloadCleaned = removeSpacesAndNewlines(payload);
 
-        Serial2.println("---");
-        delay(100);
-        Serial2.println("-E-");
+          Serial.println(payloadCleaned);
 
-        sendPackets(1024, payloadCleaned);
+          Serial2.println("---");
+          delay(100);
+          Serial2.println("-E-");
 
-        Serial2.println("---");
-      } else
-        printError(aClient.lastError().code(), aClient.lastError().message());
-    }
+          sendPackets(256, payloadCleaned);
 
-    if (millis() - last_time_sent > 5000) {
-      currentTimeSending();
-      last_time_sent = millis();
-    }
-  } else server.handleClient();
-}
-//#############################################################################################################################################
+          Serial2.println("---");
+        } else
+          printError(aClient.lastError().code(), aClient.lastError().message());
+      }
+
+      if (millis() - last_time_sent > 5000) {
+        currentTimeSending();
+        last_time_sent = millis();
+      }
+    } else server.handleClient();
+  }
+  //#############################################################################################################################################
