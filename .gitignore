@@ -50,3 +50,4 @@
 /STM/Drivers
 /STM/Debug/Drivers
 /STM/Debug
+*.o
