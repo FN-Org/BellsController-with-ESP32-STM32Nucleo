@@ -2,52 +2,47 @@
 .DS_Store
 
 # Object files
-/STM/*.o
-/STM/*.ko
-/STM/*.obj
-/STM/*.elf
+*.o
+*.ko
+*.obj
+*.elf
 
 # Libraries
-/STM/*.lib
-/STM/*.a
-/STM/*.la
-/STM/*.lo
+*.lib
+*.a
+*.la
+*.lo
 
 # Shared objects (inc. Windows DLLs)
-/STM/*.dll
-/STM/*.so
-/STM/*.so.*
-/STM/*.dylib
+*.dll
+*.so
+*.so.*
+*.dylib
 
 # Executables
-/STM/*.exe
-/STM/*.out
-/STM/*.app
-/STM/*.i*86
-/STM/*.x86_64
-/STM/*.hex
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
 
 # Misc
-/STM/*.map
-/STM/*.m
-/STM/*.png
+*.map
+*.m
+*.png
 
 # Eclipse CDT project files
-/STM/.cproject
-/STM/.project
-./STM/settings/
+.cproject
+.project
+.settings/
 
 # Vagrant directory
-/STM/.vagrant/
+.vagrant/
 
 # Include makefiles
 !Makefile
 *~
 
 # Libraries
-/STM/lib
-/STM/.settings
-/STM/Drivers
-/STM/Debug/Drivers
-/STM/Debug
-*.o
+/lib
