@@ -46,3 +46,5 @@
 
 # Libraries
 /lib
+/STM/Drivers
+/STM/Debug
