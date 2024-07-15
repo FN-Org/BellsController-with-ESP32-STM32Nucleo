@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include "string.h"
 #include "cJSON.h"
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -61,10 +62,14 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 char buf[BUFFER_SIZE];
+char uart1_rx_buffer[257] = {'0'};
+char uart1_rx_char;
+int rx_index = 0;
 
 typedef struct {
     char melodyName[MAX_STRING_SIZE];
@@ -80,6 +85,7 @@ int eventCount = 0;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -180,6 +186,7 @@ const char *jsonEx =
     "  ]\n"
     "}";
 
+char *jsonEvents = null;
 /* USER CODE END 0 */
 
 /**
@@ -212,6 +219,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
   // Simulate receiving JSON message
@@ -238,6 +246,39 @@ int main(void)
 
 	  // Delay for 1000 milliseconds (1 second)
 	  // HAL_Delay(1000);
+
+	  if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK){
+	  	         uart1_rx_buffer[rx_index++] = uart1_rx_char;
+	  	         if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer))
+	  	         {
+	  	        	uart1_rx_buffer[rx_index - 1] = '\0';
+	  	        	if (strcmp((char *)uart1_rx_buffer, "-E-") == 0) {
+	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+	  	        		rx_index = 0;
+	  	        	    parseEvents();
+	  	        	}
+	  	        	else if (strcmp((char *)uart1_rx_buffer, "-M-") == 0){
+	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+	  	        		rx_index = 0;
+	  	        		parseMelodies();
+	  	        	}
+	  	        	else if (strcmp((char *)uart1_rx_buffer, "-T-") == 0){
+	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+	  	        		rx_index = 0;
+	  	        		parseTime();
+	  	        	}
+	  	        	else if (strcmp((char *)uart1_rx_buffer, "-S-") == 0){
+	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+	  	        		rx_index = 0;
+	  	        		parseSystem();
+	  	        	}
+	  	        	 /*uint8_t buf2[259] = {'0'};
+	  	        		  	             sprintf((char *)buf2, "%s\r\n", uart1_rx_buffer);
+	  	        		  	             HAL_UART_Transmit(&huart2, buf2, strlen((char *)buf2), 100);
+	  	        		  	             memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+	  	        		  	             rx_index = 0;*/
+	  	         }
+	  	     }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -284,6 +325,39 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
 }
 
 /**
@@ -346,7 +420,7 @@ void send_uart_message(char *message) {
  * @brief Parse and save the event in the array
  * @param message, pointer to the string parsed as a json
  */
-void process_json_message(const char *event) {
+void process_json_events(const char *event) {
 	const cJSON *documents = NULL;
 	const cJSON *document = NULL;
 	const cJSON *fields = NULL;
@@ -425,6 +499,34 @@ void process_json_message(const char *event) {
         cJSON_Delete(event_json);
         return;
 }
+
+
+void parseEvents(){
+	int rx_index = 0;
+	bool received = false;
+	while(!received){
+		if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK){
+			uart1_rx_buffer[rx_index++] = uart1_rx_char;
+			if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)){
+				uart1_rx_buffer[rx_index - 1] = '\0';
+				if (strcmp((char *)uart1_rx_buffer, "---") == 0) {
+					received = true;
+					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+					rx_index = 0;
+					break;
+				}
+				else {
+					jsonEvents = strncat(jsonEvents,uart1_rx_buffer,sizeof(uart1_rx_buffer)-1);
+					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+					rx_index = 0;
+				}
+
+			}
+		}
+	}
+	process_json_events(jsonEvents);
+}
+
 
 /* USER CODE END 4 */
 

@@ -60,8 +60,8 @@ all: main-build
 main-build: BellsController.elf secondary-outputs
 
 # Tool invocations
-BellsController.elf BellsController.map: $(OBJS) $(USER_OBJS) /Users/niky/Documents/University/DCE/Project/BellsController-with-ESP32-STMNucleo/STM/STM32F446RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "BellsController.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/Users/niky/Documents/University/DCE/Project/BellsController-with-ESP32-STMNucleo/STM/STM32F446RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="BellsController.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+BellsController.elf BellsController.map: $(OBJS) $(USER_OBJS) C:\Users\Amministratore\Desktop\Progettino\Esp32\Progettino\ DCE\STM\STM32F446RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "BellsController.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\Amministratore\Desktop\Progettino\Esp32\Progettino DCE\STM\STM32F446RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="BellsController.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
