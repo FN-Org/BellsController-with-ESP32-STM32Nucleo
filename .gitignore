@@ -1,2 +1,48 @@
 # Mac OS
 .DS_Store
+
+# Object files
+/STM/*.o
+/STM/*.ko
+/STM/*.obj
+/STM/*.elf
+
+# Libraries
+/STM/*.lib
+/STM/*.a
+/STM/*.la
+/STM/*.lo
+
+# Shared objects (inc. Windows DLLs)
+/STM/*.dll
+/STM/*.so
+/STM/*.so.*
+/STM/*.dylib
+
+# Executables
+/STM/*.exe
+/STM/*.out
+/STM/*.app
+/STM/*.i*86
+/STM/*.x86_64
+/STM/*.hex
+
+# Misc
+/STM/*.map
+/STM/*.m
+/STM/*.png
+
+# Eclipse CDT project files
+/STM/.cproject
+/STM/.project
+./STM/settings/
+
+# Vagrant directory
+/STM/.vagrant/
+
+# Include makefiles
+!Makefile
+*~
+
+# Libraries
+/STM/lib
