@@ -25,6 +25,7 @@
 #include "string.h"
 #include "cJSON.h"
 #include <stdbool.h>
+#include "FLASH_SECTOR_F4.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,12 +48,11 @@
 #define NOTE_F4  349
 #define NOTE_G4  392
 
-// Concert in A (LA)
-#define NOTE_A3  220
-#define NOTE_B3  247
-#define NOTE_Db4 277
-// + NOTE_D4 (already defined)
-// + NOTE_E4 (already defined)
+
+//Melody save addresses
+#define MemoryStartAddress  0x08010000
+#define MelodySize 1000
+#define MelodyLineSize 10
 
 /* USER CODE END PD */
 
@@ -186,7 +186,6 @@ const char *jsonEx =
     "  ]\n"
     "}";
 
-char *jsonEvents = null;
 /* USER CODE END 0 */
 
 /**
@@ -265,12 +264,12 @@ int main(void)
 	  	        	else if (strcmp((char *)uart1_rx_buffer, "-T-") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
-	  	        		parseTime();
+	  	        		//parseTime();
 	  	        	}
 	  	        	else if (strcmp((char *)uart1_rx_buffer, "-S-") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
-	  	        		parseSystem();
+	  	        		//parseSystem();
 	  	        	}
 	  	        	 /*uint8_t buf2[259] = {'0'};
 	  	        		  	             sprintf((char *)buf2, "%s\r\n", uart1_rx_buffer);
@@ -298,7 +297,7 @@ void SystemClock_Config(void)
   /** Configure the main internal regulator output voltage
   */
   __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -306,8 +305,21 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLN = 180;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = 2;
+  RCC_OscInitStruct.PLL.PLLR = 2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Activate the Over-Drive mode
+  */
+  if (HAL_PWREx_EnableOverDrive() != HAL_OK)
   {
     Error_Handler();
   }
@@ -316,12 +328,12 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
     Error_Handler();
   }
@@ -502,6 +514,7 @@ void process_json_events(const char *event) {
 
 
 void parseEvents(){
+	char *jsonEvents = null;
 	int rx_index = 0;
 	bool received = false;
 	while(!received){
@@ -525,6 +538,40 @@ void parseEvents(){
 		}
 	}
 	process_json_events(jsonEvents);
+}
+
+void parseMelodies(){
+	uint32_t write_data;
+	int rx_index = 0;
+	float melodiesNum = Flash_Read_NUM(MemoryStartAddress);
+	uint32_t melodySavingAddress = MemoryStartAddress + ((melodiesNum + 1)* MelodySize);
+	Flash_Write_NUM(MemoryStartAddress,melodiesNum++);
+	uint32_t line = 0;
+
+	bool received = false;
+	while(!received){
+		if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK){
+			uart1_rx_buffer[rx_index++] = uart1_rx_char;
+			if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)){
+				uart1_rx_buffer[rx_index - 1] = '\0';
+				if (strcmp((char *)uart1_rx_buffer, "---") == 0) {
+					received = true;
+					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+					rx_index = 0;
+					line = 0;
+					break;
+				}
+				else {
+					strcpy(write_data,uart1_rx_buffer);
+					Flash_Write_Data((melodySavingAddress + (line * MelodyLineSize)),write_data);
+					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+					rx_index = 0;
+					line++;
+				}
+
+			}
+		}
+	}
 }
 
 
