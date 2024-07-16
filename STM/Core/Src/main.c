@@ -52,8 +52,8 @@
 
 //Melody save addresses
 #define MemoryStartAddress  0x08010000
-#define MelodySize 1024
-#define MelodyLineSize 16
+#define MelodySize 2048
+#define MelodyLineSize 28 //28 byte (28 indirizzi), 7 parole
 
 /* USER CODE END PD */
 
@@ -225,7 +225,7 @@ int main(void)
 
   // Simulate receiving JSON message
    //process_json_events(jsonEx);
-
+/*
    for (int i = 0; i < eventCount; i++)
    {
 	   send_uart_message(events[i].melodyName);
@@ -236,6 +236,41 @@ int main(void)
 	   send_uart_message("\n");
    }
    char* debugString;
+
+   char *data = "hello FLASH from ControllerTech\
+   			  This is a test to see how many words can we work with";
+
+   uint32_t data2[] = {0x1,0x2,0x3,0x4,0x5,0x6,0x7,0x8,0x9};
+
+   uint32_t Rx_Data[30];
+
+   char string[100];
+
+   int number = 123;
+
+   float val = 123.456;
+
+   float val2;
+
+   float val1;
+
+   Flash_Write_Data(0x08010002 , (uint32_t *)data2, 9);
+     Flash_Read_Data(0x08010002 , Rx_Data, 10);
+
+
+     int numofwords = (strlen(data)/4)+((strlen(data)%4)!=0);
+     Flash_Write_Data(0x08010042 , (uint32_t *)data, numofwords);
+     Flash_Read_Data(0x08010042 , Rx_Data, numofwords);
+     Convert_To_Str(Rx_Data, string);
+
+
+
+     Flash_Write_NUM(0x08010080, number);
+     val2 = Flash_Read_NUM(0x08010080);
+
+     Flash_Write_NUM(0x08010100, val);
+     val1 = Flash_Read_NUM(0x08010100);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -565,13 +600,9 @@ void parseMelodies(){
 	// Leggi il numero di melodie dalla memoria Flash
 	melodiesNum = Flash_Read_NUM(MemoryStartAddress);
 
-	// Converti melodiesNum in una stringa e invia tramite UART
-	char bufferinho[20];
-	sprintf(bufferinho, "%f\r\n", melodiesNum);
-	send_uart_message(bufferinho);
 
 	// Verifica e gestione di melodiesNum
-	if (isnan(melodiesNum) || melodiesNum > 64) {
+	if (isnan(melodiesNum) || melodiesNum > 63 || melodiesNum < 0) {
 		melodiesNum = 0;
 	}
 
@@ -581,8 +612,7 @@ void parseMelodies(){
 	// Scrivi il numero di melodie aggiornato nella memoria Flash
 	Flash_Write_NUM(MemoryStartAddress, melodiesNum + 1);
 
-	uint32_t write_data[4] = {0};
-	uint16_t numWords = 0;
+	uint32_t write_data[MelodyLineSize/4] = {0};
 	uint32_t line = 0;
 	bool received = false;
 
@@ -605,7 +635,8 @@ void parseMelodies(){
 						write_data[i] = ((uint32_t*)uart1_rx_buffer)[i];
 					}
 					// Scrittura dei dati nella memoria Flash
-					Flash_Write_Data((melodySavingAddress + (line * MelodyLineSize)), write_data);
+					int numofwords = (strlen(write_data)/4)+((strlen(write_data)%4)!=0);
+					Flash_Write_Data((melodySavingAddress + (line * MelodyLineSize)), write_data,numofwords);
 
 					// Pulizia del buffer e reset dell'indice
 					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));

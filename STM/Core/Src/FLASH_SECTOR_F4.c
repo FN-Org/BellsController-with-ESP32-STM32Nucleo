@@ -175,14 +175,12 @@ float Bytes2float(uint8_t * ftoa_bytes_temp)
 }
 
 
-uint32_t Flash_Write_Data (uint32_t StartSectorAddress, uint32_t *Data)
+uint32_t Flash_Write_Data (uint32_t StartSectorAddress, uint32_t *Data, uint16_t numberofwords)
 {
 
 	static FLASH_EraseInitTypeDef EraseInitStruct;
 	uint32_t SECTORError;
 	int sofar=0;
-
-	int numberofwords = (strlen(Data)/4)+((strlen(Data)%4)!= 0);
 
 
 	 /* Unlock the Flash to enable the flash control register access *************/
@@ -191,13 +189,13 @@ uint32_t Flash_Write_Data (uint32_t StartSectorAddress, uint32_t *Data)
 	  /* Erase the user Flash area */
 
 	  /* Get the number of sector to erase from 1st sector */
-
+/*
 	  uint32_t StartSector = GetSector(StartSectorAddress);
 	  uint32_t EndSectorAddress = StartSectorAddress + numberofwords*4;
 	  uint32_t EndSector = GetSector(EndSectorAddress);
 
 	  /* Fill EraseInit structure*/
-	  EraseInitStruct.TypeErase     = FLASH_TYPEERASE_SECTORS;
+/*	  EraseInitStruct.TypeErase     = FLASH_TYPEERASE_SECTORS;
 	  EraseInitStruct.VoltageRange  = FLASH_VOLTAGE_RANGE_3;
 	  EraseInitStruct.Sector        = StartSector;
 	  EraseInitStruct.NbSectors     = (EndSector - StartSector) + 1;
@@ -264,7 +262,7 @@ void Flash_Write_NUM (uint32_t StartSectorAddress, float Num)
 
 	float2Bytes(bytes_temp, Num);
 
-	Flash_Write_Data (StartSectorAddress, (uint32_t *)bytes_temp);
+	Flash_Write_Data (StartSectorAddress, (uint32_t *)bytes_temp, 1);
 }
 
 
