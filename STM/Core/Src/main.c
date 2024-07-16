@@ -25,6 +25,7 @@
 #include "string.h"
 #include "cJSON.h"
 #include <stdbool.h>
+#include <stdlib.h>
 #include "FLASH_SECTOR_F4.h"
 /* USER CODE END Includes */
 
@@ -51,8 +52,8 @@
 
 //Melody save addresses
 #define MemoryStartAddress  0x08010000
-#define MelodySize 1000
-#define MelodyLineSize 10
+#define MelodySize 1024
+#define MelodyLineSize 16
 
 /* USER CODE END PD */
 
@@ -92,7 +93,7 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-const char *jsonEx =
+/*const char *jsonEx =
     "{\n"
     "  \"documents\": [\n"
     "    {\n"
@@ -186,6 +187,7 @@ const char *jsonEx =
     "  ]\n"
     "}";
 
+
 /* USER CODE END 0 */
 
 /**
@@ -222,7 +224,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   // Simulate receiving JSON message
-   process_json_message(jsonEx);
+   //process_json_events(jsonEx);
 
    for (int i = 0; i < eventCount; i++)
    {
@@ -233,7 +235,7 @@ int main(void)
 	   send_uart_message(events[i].time);
 	   send_uart_message("\n");
    }
-
+   char* debugString;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -241,7 +243,6 @@ int main(void)
   while (1)
   {
 	  // Send "Hello world" message
-	  // send_uart_message("Hello world\n");
 
 	  // Delay for 1000 milliseconds (1 second)
 	  // HAL_Delay(1000);
@@ -251,25 +252,39 @@ int main(void)
 	  	         if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer))
 	  	         {
 	  	        	uart1_rx_buffer[rx_index - 1] = '\0';
-	  	        	if (strcmp((char *)uart1_rx_buffer, "-E-") == 0) {
+	  	        	send_uart_message(uart1_rx_buffer);
+	  	        	if (strncmp(uart1_rx_buffer, "-E-",3) == 0) {
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+	  	        		send_uart_message("Starting the event parsing");
 	  	        		rx_index = 0;
 	  	        	    parseEvents();
 	  	        	}
-	  	        	else if (strcmp((char *)uart1_rx_buffer, "-M-") == 0){
+	  	        	else if (strncmp(uart1_rx_buffer, "-M-",3) == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
+	  	        		send_uart_message("Starting the melodies parsing");
 	  	        		parseMelodies();
 	  	        	}
 	  	        	else if (strcmp((char *)uart1_rx_buffer, "-T-") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
+	  	        		send_uart_message("Starting the time parsing");
 	  	        		//parseTime();
 	  	        	}
 	  	        	else if (strcmp((char *)uart1_rx_buffer, "-S-") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
+	  	        		send_uart_message("Starting the system info parsing");
 	  	        		//parseSystem();
+	  	        	}
+	  	        	else {
+	  	        		/*int result = strcmp(debugString,"-M-");
+	  	        		char* debugString2;
+	  	        		debugString2 = itoa(result,debugString2,10);
+	  	        		send_uart_message("Result:");
+	  	        		send_uart_message(debugString2);*/
+	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+	  	        		rx_index = 0;
 	  	        	}
 	  	        	 /*uint8_t buf2[259] = {'0'};
 	  	        		  	             sprintf((char *)buf2, "%s\r\n", uart1_rx_buffer);
@@ -355,7 +370,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
+  huart1.Init.BaudRate = 9600;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -425,7 +440,9 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 void send_uart_message(char *message) {
-    HAL_UART_Transmit(&huart2, (uint8_t *)message, strlen(message), HAL_MAX_DELAY);
+	char* buf;
+	sprintf((char *)buf,"%s\r\n",message);
+    HAL_UART_Transmit(&huart2, (uint8_t *)buf, strlen(buf), HAL_MAX_DELAY);
 }
 
 /**
@@ -514,7 +531,7 @@ void process_json_events(const char *event) {
 
 
 void parseEvents(){
-	char *jsonEvents = null;
+	char *jsonEvents = NULL;
 	int rx_index = 0;
 	bool received = false;
 	while(!received){
@@ -522,7 +539,7 @@ void parseEvents(){
 			uart1_rx_buffer[rx_index++] = uart1_rx_char;
 			if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)){
 				uart1_rx_buffer[rx_index - 1] = '\0';
-				if (strcmp((char *)uart1_rx_buffer, "---") == 0) {
+				if (strncmp((char *)uart1_rx_buffer, "---",3) == 0) {
 					received = true;
 					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 					rx_index = 0;
@@ -541,34 +558,60 @@ void parseEvents(){
 }
 
 void parseMelodies(){
-	uint32_t write_data;
-	int rx_index = 0;
-	float melodiesNum = Flash_Read_NUM(MemoryStartAddress);
-	uint32_t melodySavingAddress = MemoryStartAddress + ((melodiesNum + 1)* MelodySize);
-	Flash_Write_NUM(MemoryStartAddress,melodiesNum++);
-	uint32_t line = 0;
 
+	int rx_index = 0;
+	float melodiesNum = 0;
+
+	// Leggi il numero di melodie dalla memoria Flash
+	melodiesNum = Flash_Read_NUM(MemoryStartAddress);
+
+	// Converti melodiesNum in una stringa e invia tramite UART
+	char bufferinho[20];
+	sprintf(bufferinho, "%f\r\n", melodiesNum);
+	send_uart_message(bufferinho);
+
+	// Verifica e gestione di melodiesNum
+	if (isnan(melodiesNum) || melodiesNum > 64) {
+		melodiesNum = 0;
+	}
+
+	// Calcola l'indirizzo di salvataggio della melodia
+	uint32_t melodySavingAddress = MemoryStartAddress + ((melodiesNum + 1) * MelodySize);
+
+	// Scrivi il numero di melodie aggiornato nella memoria Flash
+	Flash_Write_NUM(MemoryStartAddress, melodiesNum + 1);
+
+	uint32_t write_data[4] = {0};
+	uint16_t numWords = 0;
+	uint32_t line = 0;
 	bool received = false;
-	while(!received){
-		if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK){
+
+	// Loop per ricezione dati via UART
+	while (!received) {
+		if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK) {
 			uart1_rx_buffer[rx_index++] = uart1_rx_char;
-			if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)){
+			if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)) {
 				uart1_rx_buffer[rx_index - 1] = '\0';
-				if (strcmp((char *)uart1_rx_buffer, "---") == 0) {
+				if (strncmp((char *)uart1_rx_buffer, "---", 3) == 0) {
 					received = true;
 					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+					send_uart_message("melody parsing ended!");
 					rx_index = 0;
 					line = 0;
-					break;
-				}
-				else {
-					strcpy(write_data,uart1_rx_buffer);
-					Flash_Write_Data((melodySavingAddress + (line * MelodyLineSize)),write_data);
+					return;
+				} else {
+					// Conversione di uart1_rx_buffer a write_data
+					for (int i = 0; i < (rx_index + sizeof(uint32_t) - 1) / sizeof(uint32_t); i++) {
+						write_data[i] = ((uint32_t*)uart1_rx_buffer)[i];
+					}
+					// Scrittura dei dati nella memoria Flash
+					Flash_Write_Data((melodySavingAddress + (line * MelodyLineSize)), write_data);
+
+					// Pulizia del buffer e reset dell'indice
 					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 					rx_index = 0;
 					line++;
 				}
-
 			}
 		}
 	}
