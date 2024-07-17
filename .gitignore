@@ -33,8 +33,10 @@
 *.png
 
 # Eclipse CDT project files
-.cproject
+.metadata/
 .settings/
+.launch
+*.ld
 
 # Vagrant directory
 .vagrant/
