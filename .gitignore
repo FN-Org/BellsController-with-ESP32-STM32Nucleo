@@ -1,51 +1,51 @@
 # Mac OS
 .DS_Store
 
-# Object files
+# Ignore Cube IDE generated files
+.metadata/
+.settings/
+.launch
+
+# Ignore build and output directories
+/Debug/
+/Release/
+/MDK-ARM/
+
+# Ignore object files, libraries, and executables
 *.o
 *.ko
 *.obj
 *.elf
-
-# Libraries
 *.lib
 *.a
 *.la
 *.lo
-
-# Shared objects (inc. Windows DLLs)
 *.dll
 *.so
 *.so.*
 *.dylib
-
-# Executables
 *.exe
 *.out
 *.app
 *.i*86
 *.x86_64
 *.hex
-
-# Misc
 *.map
+
+# Ignore miscellaneous files
 *.m
 *.png
 
-# Eclipse CDT project files
-.metadata/
-.settings/
-.launch
-*.ld
+# Ignore Eclipse CDT project files
+# No specific Eclipse CDT files ignored here
 
-# Vagrant directory
+# Ignore Vagrant directory
 .vagrant/
 
-# Include makefiles
-!Makefile
+# Ignore temporary files
 *~
 
-# Libraries
+# Exclude specific directories
 /lib
 /STM/Drivers
 /STM/Debug
