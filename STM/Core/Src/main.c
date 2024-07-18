@@ -222,7 +222,6 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-
   // Simulate receiving JSON message
    //process_json_events(jsonEx);
 /*
@@ -288,17 +287,18 @@ int main(void)
 	  	         {
 	  	        	uart1_rx_buffer[rx_index - 1] = '\0';
 	  	        	send_uart_message(uart1_rx_buffer);
-	  	        	if (strncmp(uart1_rx_buffer, "-E-",3) == 0) {
+	  	        	if (strcmp(uart1_rx_buffer, "-E-\r") == 0) {
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		send_uart_message("Starting the event parsing");
 	  	        		rx_index = 0;
 	  	        	    parseEvents();
 	  	        	}
-	  	        	else if (strncmp(uart1_rx_buffer, "-M-",3) == 0){
+	  	        	else if (strcmp(uart1_rx_buffer, "-M-\r") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        		send_uart_message("Starting the melodies parsing");
 	  	        		parseMelodies();
+	  	        		send_uart_message("Returned to main");
 	  	        	}
 	  	        	else if (strcmp((char *)uart1_rx_buffer, "-T-") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
@@ -313,11 +313,7 @@ int main(void)
 	  	        		//parseSystem();
 	  	        	}
 	  	        	else {
-	  	        		/*int result = strcmp(debugString,"-M-");
-	  	        		char* debugString2;
-	  	        		debugString2 = itoa(result,debugString2,10);
-	  	        		send_uart_message("Result:");
-	  	        		send_uart_message(debugString2);*/
+	  	        		send_uart_message("What else?");
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        	}
@@ -475,7 +471,6 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 void send_uart_message(char *message) {
-	char* buf;
 	sprintf((char *)buf,"%s\r\n",message);
     HAL_UART_Transmit(&huart2, (uint8_t *)buf, strlen(buf), HAL_MAX_DELAY);
 }
@@ -574,7 +569,7 @@ void parseEvents(){
 			uart1_rx_buffer[rx_index++] = uart1_rx_char;
 			if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)){
 				uart1_rx_buffer[rx_index - 1] = '\0';
-				if (strncmp((char *)uart1_rx_buffer, "---",3) == 0) {
+				if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
 					received = true;
 					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 					rx_index = 0;
@@ -594,7 +589,7 @@ void parseEvents(){
 
 void parseMelodies(){
 
-	int rx_index = 0;
+	rx_index = 0;
 	float melodiesNum = 0;
 
 	// Leggi il numero di melodie dalla memoria Flash
@@ -622,13 +617,12 @@ void parseMelodies(){
 			uart1_rx_buffer[rx_index++] = uart1_rx_char;
 			if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)) {
 				uart1_rx_buffer[rx_index - 1] = '\0';
-				if (strncmp((char *)uart1_rx_buffer, "---", 3) == 0) {
+				if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
 					received = true;
 					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 					send_uart_message("melody parsing ended!");
 					rx_index = 0;
 					line = 0;
-					return;
 				} else {
 					// Conversione di uart1_rx_buffer a write_data
 					for (int i = 0; i < (rx_index + sizeof(uint32_t) - 1) / sizeof(uint32_t); i++) {
