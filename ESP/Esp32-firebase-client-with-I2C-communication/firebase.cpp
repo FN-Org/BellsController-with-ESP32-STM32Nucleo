@@ -387,7 +387,7 @@ void readAndSendBuffer(int cnt) {
   Serial2.println("---");
   delay(100);
   Serial2.println("-M-");
-  delay(100);
+  delay(700);
 
   String melodyTitle = testFile.readStringUntil('\n');
   melodyTitle.trim();

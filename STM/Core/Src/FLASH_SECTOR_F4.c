@@ -175,7 +175,7 @@ float Bytes2float(uint8_t * ftoa_bytes_temp)
 }
 
 
-uint32_t Flash_Write_Data (uint32_t StartSectorAddress, uint32_t *Data, uint16_t numberofwords)
+uint32_t Flash_Write_Data (uint32_t StartSectorAddress, uint32_t *Data, uint16_t numberofwords,bool delete)
 {
 
 	static FLASH_EraseInitTypeDef EraseInitStruct;
@@ -189,24 +189,26 @@ uint32_t Flash_Write_Data (uint32_t StartSectorAddress, uint32_t *Data, uint16_t
 	  /* Erase the user Flash area */
 
 	  /* Get the number of sector to erase from 1st sector */
-/*
-	  uint32_t StartSector = GetSector(StartSectorAddress);
-	  uint32_t EndSectorAddress = StartSectorAddress + numberofwords*4;
-	  uint32_t EndSector = GetSector(EndSectorAddress);
+	  if (delete){
+		  uint32_t StartSector = GetSector(StartSectorAddress);
+		  uint32_t EndSectorAddress = StartSectorAddress + numberofwords*4;
+		  uint32_t EndSector = GetSector(EndSectorAddress);
 
-	  /* Fill EraseInit structure*/
-/*	  EraseInitStruct.TypeErase     = FLASH_TYPEERASE_SECTORS;
-	  EraseInitStruct.VoltageRange  = FLASH_VOLTAGE_RANGE_3;
-	  EraseInitStruct.Sector        = StartSector;
-	  EraseInitStruct.NbSectors     = (EndSector - StartSector) + 1;
+		  /* Fill EraseInit structure*/
 
-	  /* Note: If an erase operation in Flash memory also concerns data in the data or instruction cache,
-	     you have to make sure that these data are rewritten before they are accessed during code
-	     execution. If this cannot be done safely, it is recommended to flush the caches by setting the
-	     DCRST and ICRST bits in the FLASH_CR register. */
-	  if (HAL_FLASHEx_Erase(&EraseInitStruct, &SECTORError) != HAL_OK)
-	  {
-		  return HAL_FLASH_GetError ();
+		  EraseInitStruct.TypeErase     = FLASH_TYPEERASE_SECTORS;
+		  EraseInitStruct.VoltageRange  = FLASH_VOLTAGE_RANGE_3;
+		  EraseInitStruct.Sector        = StartSector;
+		  EraseInitStruct.NbSectors     = (EndSector - StartSector) + 1;
+
+		  /* Note: If an erase operation in Flash memory also concerns data in the data or instruction cache,
+			 you have to make sure that these data are rewritten before they are accessed during code
+			 execution. If this cannot be done safely, it is recommended to flush the caches by setting the
+			 DCRST and ICRST bits in the FLASH_CR register. */
+		  if (HAL_FLASHEx_Erase(&EraseInitStruct, &SECTORError) != HAL_OK)
+		  {
+			  return HAL_FLASH_GetError ();
+		  }
 	  }
 
 	  /* Program the user Flash area word by word
@@ -257,12 +259,12 @@ void Convert_To_Str (uint32_t *Data, char *Buf)
 }
 
 
-void Flash_Write_NUM (uint32_t StartSectorAddress, float Num)
+uint32_t Flash_Write_NUM (uint32_t StartSectorAddress, float Num,bool delete)
 {
 
 	float2Bytes(bytes_temp, Num);
 
-	Flash_Write_Data (StartSectorAddress, (uint32_t *)bytes_temp, 1);
+	return Flash_Write_Data (StartSectorAddress, (uint32_t *)bytes_temp, 1,delete);
 }
 
 
@@ -274,4 +276,25 @@ float Flash_Read_NUM (uint32_t StartSectorAddress)
 	Flash_Read_Data(StartSectorAddress, (uint32_t *)buffer, 1);
 	value = Bytes2float(buffer);
 	return value;
+}
+
+void EraseFlashSector(uint32_t StartSectorAddress){
+	static FLASH_EraseInitTypeDef EraseInitStruct;
+	uint32_t SECTORError;
+	HAL_FLASH_Unlock();
+	uint32_t StartSector = GetSector(StartSectorAddress);
+
+	  /* Fill EraseInit structure*/
+
+	  EraseInitStruct.TypeErase     = FLASH_TYPEERASE_SECTORS;
+	  EraseInitStruct.VoltageRange  = FLASH_VOLTAGE_RANGE_3;
+	  EraseInitStruct.Sector        = StartSector;
+	  EraseInitStruct.NbSectors     = 1;
+
+	  if (HAL_FLASHEx_Erase(&EraseInitStruct, &SECTORError) != HAL_OK)
+	  {
+	  		send_uart_message("Error when erasing sector");
+	  }
+
+	  HAL_FLASH_Lock();
 }

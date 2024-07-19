@@ -18,16 +18,19 @@
 #define INC_FLASH_SECTOR_F4_H_
 
 #include "stdint.h"
+#include <stdbool.h>
 
-uint32_t Flash_Write_Data (uint32_t StartSectorAddress, uint32_t *Data, uint16_t numberofwords);
+uint32_t Flash_Write_Data (uint32_t StartSectorAddress, uint32_t *Data, uint16_t numberofwords,bool delete);
 
 void Flash_Read_Data (uint32_t StartSectorAddress, uint32_t *RxBuf, uint16_t numberofwords);
 
 void Convert_To_Str (uint32_t *Data, char *Buf);
 
-void Flash_Write_NUM (uint32_t StartSectorAddress, float Num);
+uint32_t Flash_Write_NUM (uint32_t StartSectorAddress, float Num,bool delete);
 
 float Flash_Read_NUM (uint32_t StartSectorAddress);
+
+void EraseFlashSector(uint32_t StartSectorAddress);
 
 
 #endif /* INC_FLASH_SECTOR_F4_H_ */
