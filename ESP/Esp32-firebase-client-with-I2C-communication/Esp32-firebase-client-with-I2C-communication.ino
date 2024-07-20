@@ -19,7 +19,6 @@
 // Global Variables//
 #define SENDING_INTERVAL 60000
 // Other global variables
-unsigned long dataMillis = 0;
 bool first_time = true;
 bool setupCompleted = false;
 
@@ -28,8 +27,7 @@ bool setupCompleted = false;
 const long gmtOffset_sec = 3600;      // UTC +1 (3600 seconds)
 const int daylightOffset_sec = 3600;  // Ora legale
 
-
-
+unsigned long dataMillis = 0;
 unsigned long last_time_sent = 30000;
 
 //#########################################################################################################
@@ -108,6 +106,7 @@ void loop() {
           file.println(systemId);
           file.close();
           Serial.println("Variables written in the SPIFFS");
+          fetchMelodies();
         } else {
           Serial.println("Document already existed or error occurred.");
         }
@@ -115,18 +114,10 @@ void loop() {
         Serial.println("Document already existed or error occurred.");
       }
 
-      fetchMelodies();
-
       if (melodiesNum < melodiesNames.size()) {
         melodiesNum = melodiesNames.size();
         updateMelodies();
       }
-
-
-      // Qui invece si dà il vero systemId che si prende dallo SPIFFS
-      // (e magari si salva coem variabile globale)
-      // Si vanno a creare i documenti con quell'ID, se esistono già mi aspetto
-      // che il DB si arrabbi e che me lo faccia sapere in qualche modo
     }
 
     if (app.ready() && (millis() - dataMillis > SENDING_INTERVAL || dataMillis == 0)) {

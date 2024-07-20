@@ -351,7 +351,7 @@ void updateMelodies() {
     }
   }
 
-  //update the SPIFFS
+  // Update the SPIFFS
   saveSystemInfo(name, location, bellsNum, melodiesNum, pin);
   File file = SPIFFS.open("/system_info.txt", "a");
   if (!file) {
@@ -361,7 +361,7 @@ void updateMelodies() {
   file.println(systemId);
   file.close();
 
-  //update the firestore db
+  // Update the firestore db
   path = "systems/" + systemId;
   Values::IntegerValue nMelodies(melodiesNum);
   Document<Values::Value> update("nMelodies", Values::Value(nMelodies));
