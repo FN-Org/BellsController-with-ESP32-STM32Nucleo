@@ -67,6 +67,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
 RTC_HandleTypeDef hrtc;
 
 UART_HandleTypeDef huart1;
@@ -94,6 +96,7 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_RTC_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -229,6 +232,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   MX_RTC_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   // Simulate receiving JSON message
    //process_json_events(jsonEx);
@@ -300,6 +304,11 @@ int main(void)
   RTC_DateTypeDef sDate = {0};
   readAndRing(4);
   bool parsedTime = false;
+
+  HD44780_Init(2);
+      HD44780_Clear();
+      HD44780_SetCursor(0,0);
+      HD44780_PrintStr("Sync and start");
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -335,7 +344,19 @@ int main(void)
 	  	        		rx_index = 0;
 	  	        		send_uart_message("Starting the time parsing");
 	  	        		parseTime();
-	  	        		parsedTime = true;
+
+	  	        		HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
+	  	        		HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
+
+	  	        		HD44780_Clear();
+
+	  	        		sprintf(buf,"Date: %02d.%02d.%02d",sDate.Date,sDate.Month,sDate.Year);
+						HD44780_SetCursor(0,0);
+						HD44780_PrintStr(buf);
+
+	  	        		sprintf(buf,"Time: %02d.%02d.%02d",sTime.Hours,sTime.Minutes,sTime.Seconds);
+						HD44780_SetCursor(0,1);
+						HD44780_PrintStr(buf);
 	  	        	}
 	  	        	else if (strcmp((char *)uart1_rx_buffer, "-S-\r") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
@@ -351,20 +372,6 @@ int main(void)
 	  	        	}
 	  	         }
 	  	     }
-
-	//Time debug
-	  if (parsedTime){
-	    HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
-	    HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
-
-
-	    sprintf(buf,"Date: %02d.%02d.%02d\t",sDate.Date,sDate.Month,sDate.Year);
-	    send_uart_message(buf);
-	    sprintf(buf,"Time: %02d.%02d.%02d\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds);
-	    send_uart_message(buf);
-
-	    parsedTime = false;
-	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -429,6 +436,40 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
   * @brief RTC Initialization Function
   * @param None
   * @retval None
@@ -479,7 +520,7 @@ static void MX_RTC_Init(void)
   sDate.WeekDay = RTC_WEEKDAY_MONDAY;
   sDate.Month = RTC_MONTH_JANUARY;
   sDate.Date = 0x1;
-  sDate.Year = 0x5;
+  sDate.Year = 0x0;
 
   if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
   {
@@ -569,6 +610,7 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
