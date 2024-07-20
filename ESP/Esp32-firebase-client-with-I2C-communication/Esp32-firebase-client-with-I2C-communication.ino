@@ -17,7 +17,7 @@
 
 //########################################################################################
 // Global Variables//
-
+#define SENDING_INTERVAL 60000
 // Other global variables
 unsigned long dataMillis = 0;
 bool first_time = true;
@@ -30,7 +30,7 @@ const int daylightOffset_sec = 3600;  // Ora legale
 
 
 
-unsigned long last_time_sent = 0;
+unsigned long last_time_sent = 30000;
 
 //#########################################################################################################
 // SETUP//
@@ -129,7 +129,7 @@ void loop() {
       // che il DB si arrabbi e che me lo faccia sapere in qualche modo
     }
 
-    if (app.ready() && (millis() - dataMillis > 60000 || dataMillis == 0)) {
+    if (app.ready() && (millis() - dataMillis > SENDING_INTERVAL || dataMillis == 0)) {
       dataMillis = millis();
 
       // Should run the Create_Documents.ino prior to test this example to create the documents in the collection Id at a0/b0/c0
@@ -167,7 +167,7 @@ void loop() {
         printError(aClient.lastError().code(), aClient.lastError().message());
     }
 
-    if (millis() - last_time_sent > 5000) {
+    if (millis() - last_time_sent > SENDING_INTERVAL) {
       currentTimeSending();
       last_time_sent = millis();
     }

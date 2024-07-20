@@ -27,6 +27,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "FLASH_SECTOR_F4.h"
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,6 +57,8 @@
 #define MelodyLineSize 28 //28 byte (28 indirizzi), 7 parole
 #define NumberMelodiesMemoryAddress 0x08010000
 
+//Time
+#define StartYear 2000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -279,10 +282,24 @@ int main(void)
 
 	Flash_Write_Data(MemoryStartAddress,(uint32_t *) data,1);
 */
-  //EraseFlashSector(MemoryStartAddress);
-  //EraseFlashSector(NumberMelodiesMemoryAddress);
+  EraseFlashSector(MemoryStartAddress);
+  EraseFlashSector(NumberMelodiesMemoryAddress);
+/*
+  RTC_TimeTypeDef sTime = {0};
+  RTC_DateTypeDef sDate = {0};
 
-  readAndRing(1);
+  HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+  HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+
+
+  sprintf(buf,"Date: %02d.%02d.%02d\t",sDate.Date,sDate.Month,sDate.Year);
+  send_uart_message(buf);
+  sprintf(buf,"Time: %02d.%02d.%02d\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds);
+  send_uart_message(buf);*/
+  RTC_TimeTypeDef sTime = {0};
+  RTC_DateTypeDef sDate = {0};
+  readAndRing(4);
+  bool parsedTime = false;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -317,7 +334,8 @@ int main(void)
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        		send_uart_message("Starting the time parsing");
-	  	        		//parseTime();
+	  	        		parseTime();
+	  	        		parsedTime = true;
 	  	        	}
 	  	        	else if (strcmp((char *)uart1_rx_buffer, "-S-\r") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
@@ -326,12 +344,27 @@ int main(void)
 	  	        		//parseSystem();
 	  	        	}
 	  	        	else {
-	  	        		//send_uart_message("What else?");
+	  	        		send_uart_message("What else?");
+	  	        		parsedTime = false;
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        	}
 	  	         }
 	  	     }
+
+	//Time debug
+	  if (parsedTime){
+	    HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
+	    HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
+
+
+	    sprintf(buf,"Date: %02d.%02d.%02d\t",sDate.Date,sDate.Month,sDate.Year);
+	    send_uart_message(buf);
+	    sprintf(buf,"Time: %02d.%02d.%02d\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds);
+	    send_uart_message(buf);
+
+	    parsedTime = false;
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -446,7 +479,7 @@ static void MX_RTC_Init(void)
   sDate.WeekDay = RTC_WEEKDAY_MONDAY;
   sDate.Month = RTC_MONTH_JANUARY;
   sDate.Date = 0x1;
-  sDate.Year = 0x0;
+  sDate.Year = 0x5;
 
   if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
   {
@@ -736,13 +769,13 @@ void readAndRing(int melodyNum){
 
 	//show on display the title
 
-	if (ReadedString[0] != 'ÿ'){
+	if ((unsigned char)ReadedString[0] != 0xFF){
 		line++;
-		while((unsigned char)ReadedString[0] != 0xFF){
+		while(true){
 			melodyLineAddress = melodyStartingAddress + line * MelodyLineSize;
 			Flash_Read_Data(melodyLineAddress,ReadBuffer,MelodyLineSize/4);
 			Convert_To_Str(ReadBuffer,ReadedString);
-
+			if ((unsigned char)ReadedString[0] == 0xFF) break;
 			note = atoi(ReadedString);
 			duration = atof(ReadedString + 2);
 
@@ -773,7 +806,124 @@ void play(int note,double duration){
 	HAL_Delay((uint32_t)(duration * 1000));
 }
 
+void parseTime(){
 
+	char jsonTime[128] = {0};
+
+
+	while (true) {
+			if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK) {
+				uart1_rx_buffer[rx_index++] = uart1_rx_char;
+				if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)) {
+					uart1_rx_buffer[rx_index - 1] = '\0';
+					if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
+						memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+						send_uart_message("Time parsing ended!");
+						rx_index = 0;
+						break;
+					}
+					else {
+						uart1_rx_buffer[rx_index - 2] = '\0';
+						strcpy(jsonTime,uart1_rx_buffer);
+						memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+						rx_index = 0;
+						process_json_time(jsonTime);
+					}
+				}
+
+			}
+	}
+}
+
+void process_json_time(const char* time){
+	RTC_TimeTypeDef sTime = {0};
+	RTC_DateTypeDef sDate = {0};
+
+	cJSON *time_json = cJSON_Parse(time);
+	if (time_json == NULL)
+	{
+		const char *error_ptr = cJSON_GetErrorPtr();
+		if (error_ptr != NULL)
+		{
+			fprintf(stderr, "Error before: %s\n", error_ptr);
+		}
+		goto end;
+	}
+
+	cJSON *seconds = cJSON_GetObjectItemCaseSensitive(time_json, "s");
+	double seconds_num = 0;
+	cJSON *minutes = cJSON_GetObjectItemCaseSensitive(time_json, "mi");
+	double minutes_num = 0;
+	cJSON *hour = cJSON_GetObjectItemCaseSensitive(time_json, "h");
+	double hour_num = 0;
+	cJSON *monthDay = cJSON_GetObjectItemCaseSensitive(time_json, "md");
+	double monthDay_num = 0;
+	cJSON *yearMonth = cJSON_GetObjectItemCaseSensitive(time_json, "mo");
+	double yearMonth_num = 0;
+	cJSON *year = cJSON_GetObjectItemCaseSensitive(time_json, "y");
+	double year_num = 0;
+	cJSON *weekDay = cJSON_GetObjectItemCaseSensitive(time_json, "wd");
+	double weekDay_num = 0;
+	cJSON *legalHour = cJSON_GetObjectItemCaseSensitive(time_json, "l");
+	double legalHour_num = 0;
+
+	seconds_num  = cJSON_GetNumberValue(seconds);
+	minutes_num  = cJSON_GetNumberValue(minutes);
+	hour_num  = cJSON_GetNumberValue(hour);
+	monthDay_num  = cJSON_GetNumberValue(monthDay);
+	yearMonth_num  = cJSON_GetNumberValue(yearMonth);
+	year_num  = cJSON_GetNumberValue(year);
+	weekDay_num = cJSON_GetNumberValue(weekDay);
+	legalHour_num  = cJSON_GetNumberValue(legalHour);
+
+
+	if (seconds_num == NAN || minutes_num == NAN || hour_num == NAN || monthDay_num == NAN
+			||yearMonth_num == NAN || year_num == NAN || legalHour_num == NAN || weekDay_num == NAN)
+	{
+		goto end;
+	}
+	else{
+		if (weekDay = 0) weekDay = 7;
+		sTime.Hours = (uint8_t) hour_num;
+		sTime.Minutes = (uint8_t) minutes_num;
+		sTime.Seconds = (uint8_t) seconds_num;
+		sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+		sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+		if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+		{
+			send_uart_message("Error parsing time 1");
+			Error_Handler();
+		}
+		sDate.WeekDay = (uint8_t)weekDay_num;
+		sDate.Month = (uint8_t)yearMonth_num+1;
+		sDate.Date = (uint8_t)monthDay_num;
+		sDate.Year = (uint8_t)year_num%100;
+
+		if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+		{
+			send_uart_message("Error parsing time 2");
+			Error_Handler();
+		}
+	}
+
+
+	end:
+	      cJSON_Delete(time_json);
+	      return;
+}
+
+
+
+// Funzione per convertire data e ora RTC in stringa ISO 8601
+void RTC_to_ISO8601(RTC_DateTypeDef *date, RTC_TimeTypeDef *time, char *buffer) {
+    sprintf(buffer, "%04d-%02d-%02dT%02d:%02d:%02dZ\0",
+             date->Year + StartYear, // Anno completo
+             date->Month,
+             date->Date,
+             time->Hours,
+             time->Minutes,
+             time->Seconds);
+}
 
 /* USER CODE END 4 */
 
