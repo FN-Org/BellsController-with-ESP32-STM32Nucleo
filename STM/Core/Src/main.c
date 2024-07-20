@@ -64,6 +64,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+RTC_HandleTypeDef hrtc;
+
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
@@ -88,6 +90,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_RTC_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -222,6 +225,7 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
   // Simulate receiving JSON message
    //process_json_events(jsonEx);
@@ -275,8 +279,10 @@ int main(void)
 
 	Flash_Write_Data(MemoryStartAddress,(uint32_t *) data,1);
 */
-  EraseFlashSector(MemoryStartAddress);
-  EraseFlashSector(NumberMelodiesMemoryAddress);
+  //EraseFlashSector(MemoryStartAddress);
+  //EraseFlashSector(NumberMelodiesMemoryAddress);
+
+  readAndRing(1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -307,28 +313,23 @@ int main(void)
 	  	        		parseMelodies();
 	  	        		send_uart_message("Returned to main");
 	  	        	}
-	  	        	else if (strcmp((char *)uart1_rx_buffer, "-T-") == 0){
+	  	        	else if (strcmp((char *)uart1_rx_buffer, "-T-\r") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        		send_uart_message("Starting the time parsing");
 	  	        		//parseTime();
 	  	        	}
-	  	        	else if (strcmp((char *)uart1_rx_buffer, "-S-") == 0){
+	  	        	else if (strcmp((char *)uart1_rx_buffer, "-S-\r") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        		send_uart_message("Starting the system info parsing");
 	  	        		//parseSystem();
 	  	        	}
 	  	        	else {
-	  	        		send_uart_message("What else?");
+	  	        		//send_uart_message("What else?");
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        	}
-	  	        	 /*uint8_t buf2[259] = {'0'};
-	  	        		  	             sprintf((char *)buf2, "%s\r\n", uart1_rx_buffer);
-	  	        		  	             HAL_UART_Transmit(&huart2, buf2, strlen((char *)buf2), 100);
-	  	        		  	             memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
-	  	        		  	             rx_index = 0;*/
 	  	         }
 	  	     }
     /* USER CODE END WHILE */
@@ -355,9 +356,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
+  RCC_OscInitStruct.LSEState = RCC_LSE_OFF;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 8;
@@ -390,6 +393,69 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RTC_Init(void)
+{
+
+  /* USER CODE BEGIN RTC_Init 0 */
+
+  /* USER CODE END RTC_Init 0 */
+
+  RTC_TimeTypeDef sTime = {0};
+  RTC_DateTypeDef sDate = {0};
+
+  /* USER CODE BEGIN RTC_Init 1 */
+
+  /* USER CODE END RTC_Init 1 */
+
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /* USER CODE BEGIN Check_RTC_BKUP */
+
+  /* USER CODE END Check_RTC_BKUP */
+
+  /** Initialize RTC and set the Time and Date
+  */
+  sTime.Hours = 0x0;
+  sTime.Minutes = 0x0;
+  sTime.Seconds = 0x0;
+  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sDate.WeekDay = RTC_WEEKDAY_MONDAY;
+  sDate.Month = RTC_MONTH_JANUARY;
+  sDate.Date = 0x1;
+  sDate.Year = 0x0;
+
+  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
+
 }
 
 /**
@@ -648,6 +714,63 @@ void parseMelodies(){
 			}
 		}
 	}
+}
+
+
+void readAndRing(int melodyNum){
+	uint32_t melodyStartingAddress = MemoryStartAddress + (melodyNum-1)* MelodySize;
+	uint32_t ReadBuffer[MelodyLineSize/4];
+	int line = 0;
+	int note = 0;
+	double duration = 0.0;
+	uint32_t melodyLineAddress = melodyStartingAddress + line * MelodyLineSize;
+
+	char ReadedString[MelodyLineSize];
+
+	Flash_Read_Data(melodyStartingAddress,ReadBuffer,(MelodyLineSize-1)/4);
+
+	Convert_To_Str(ReadBuffer,ReadedString);
+
+	send_uart_message("Starting playing:");
+	send_uart_message(ReadedString);
+
+	//show on display the title
+
+	if (ReadedString[0] != 'ÿ'){
+		line++;
+		while((unsigned char)ReadedString[0] != 0xFF){
+			melodyLineAddress = melodyStartingAddress + line * MelodyLineSize;
+			Flash_Read_Data(melodyLineAddress,ReadBuffer,MelodyLineSize/4);
+			Convert_To_Str(ReadBuffer,ReadedString);
+
+			note = atoi(ReadedString);
+			duration = atof(ReadedString + 2);
+
+			play(note,duration);
+
+			line++;
+		}
+
+		send_uart_message("Melody Playing finished");
+	}
+	else send_uart_message("Melody not found!");
+
+
+
+
+}
+
+
+void play(int note,double duration){
+	char buf[20];
+	sprintf(buf, "Playing: %d", note);
+	send_uart_message(buf);
+
+	sprintf(buf, "Duration: %.2f", duration); // Limita a 2 cifre decimali per la durata
+	send_uart_message(buf);
+
+	// Introduce un ritardo basato sulla durata in secondi convertita in millisecondi
+	HAL_Delay((uint32_t)(duration * 1000));
 }
 
 
