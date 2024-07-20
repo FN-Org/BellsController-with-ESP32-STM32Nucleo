@@ -77,6 +77,8 @@ char buf[BUFFER_SIZE];
 char uart1_rx_buffer[257] = {'0'};
 char uart1_rx_char;
 int rx_index = 0;
+RTC_TimeTypeDef CurrentTime = {0};
+RTC_DateTypeDef CurrentDate = {0};
 
 typedef struct {
     char melodyName[MAX_STRING_SIZE];
@@ -214,7 +216,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -296,8 +297,6 @@ int main(void)
   send_uart_message(buf);
   sprintf(buf,"Time: %02d.%02d.%02d\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds);
   send_uart_message(buf);*/
-  RTC_TimeTypeDef sTime = {0};
-  RTC_DateTypeDef sDate = {0};
   readAndRing(4);
   bool parsedTime = false;
   /* USER CODE END 2 */
@@ -354,13 +353,13 @@ int main(void)
 
 	//Time debug
 	  if (parsedTime){
-	    HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
-	    HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
+	    HAL_RTC_GetTime(&hrtc, &CurrentTime, RTC_FORMAT_BCD);
+	    HAL_RTC_GetDate(&hrtc, &CurrentDate, RTC_FORMAT_BCD);
 
 
-	    sprintf(buf,"Date: %02d.%02d.%02d\t",sDate.Date,sDate.Month,sDate.Year);
+	    sprintf(buf,"Date: %02d.%02d.%02d\t",CurrentDate.Date,CurrentDate.Month,CurrentDate.Year);
 	    send_uart_message(buf);
-	    sprintf(buf,"Time: %02d.%02d.%02d\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds);
+	    sprintf(buf,"Time: %02d.%02d.%02d\r\n",CurrentTime.Hours,CurrentTime.Minutes,CurrentTime.Seconds);
 	    send_uart_message(buf);
 
 	    parsedTime = false;
@@ -442,6 +441,7 @@ static void MX_RTC_Init(void)
 
   RTC_TimeTypeDef sTime = {0};
   RTC_DateTypeDef sDate = {0};
+  RTC_AlarmTypeDef sAlarm = {0};
 
   /* USER CODE BEGIN RTC_Init 1 */
 
@@ -479,9 +479,28 @@ static void MX_RTC_Init(void)
   sDate.WeekDay = RTC_WEEKDAY_MONDAY;
   sDate.Month = RTC_MONTH_JANUARY;
   sDate.Date = 0x1;
-  sDate.Year = 0x5;
+  sDate.Year = 0x1;
 
   if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Enable the Alarm A
+  */
+  sAlarm.AlarmTime.Hours = 0x0;
+  sAlarm.AlarmTime.Minutes = 0x0;
+  sAlarm.AlarmTime.Seconds = 0x0;
+  sAlarm.AlarmTime.SubSeconds = 0x0;
+  sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+  sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
+  sAlarm.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY|RTC_ALARMMASK_HOURS
+                              |RTC_ALARMMASK_MINUTES;
+  sAlarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
+  sAlarm.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
+  sAlarm.AlarmDateWeekDay = 0x1;
+  sAlarm.Alarm = RTC_ALARM_A;
+  if (HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BCD) != HAL_OK)
   {
     Error_Handler();
   }
@@ -884,22 +903,22 @@ void process_json_time(const char* time){
 	}
 	else{
 		if (weekDay = 0) weekDay = 7;
-		sTime.Hours = (uint8_t) hour_num;
-		sTime.Minutes = (uint8_t) minutes_num;
-		sTime.Seconds = (uint8_t) seconds_num;
-		sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-		sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-		if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+		CurrentTime.Hours = (uint8_t) hour_num;
+		CurrentTime.Minutes = (uint8_t) minutes_num;
+		CurrentTime.Seconds = (uint8_t) seconds_num;
+		CurrentTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+		CurrentTime.StoreOperation = RTC_STOREOPERATION_RESET;
+		if (HAL_RTC_SetTime(&hrtc, &CurrentTime, RTC_FORMAT_BCD) != HAL_OK)
 		{
 			send_uart_message("Error parsing time 1");
 			Error_Handler();
 		}
-		sDate.WeekDay = (uint8_t)weekDay_num;
-		sDate.Month = (uint8_t)yearMonth_num+1;
-		sDate.Date = (uint8_t)monthDay_num;
-		sDate.Year = (uint8_t)year_num%100;
+		CurrentDate.WeekDay = (uint8_t)weekDay_num;
+		CurrentDate.Month = (uint8_t)yearMonth_num+1;
+		CurrentDate.Date = (uint8_t)monthDay_num;
+		CurrentDate.Year = (uint8_t)year_num%100;
 
-		if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+		if (HAL_RTC_SetDate(&hrtc, &CurrentDate, RTC_FORMAT_BCD) != HAL_OK)
 		{
 			send_uart_message("Error parsing time 2");
 			Error_Handler();
@@ -923,6 +942,17 @@ void RTC_to_ISO8601(RTC_DateTypeDef *date, RTC_TimeTypeDef *time, char *buffer) 
              time->Hours,
              time->Minutes,
              time->Seconds);
+}
+
+void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtcAlarm){
+	HAL_RTC_GetTime(&hrtc, &CurrentTime, RTC_FORMAT_BCD);
+	HAL_RTC_GetDate(&hrtc, &CurrentDate, RTC_FORMAT_BCD);
+
+
+	sprintf(buf,"Date: %02d.%02d.%02d\t",CurrentDate.Date,CurrentDate.Month,CurrentDate.Year);
+	send_uart_message(buf);
+	sprintf(buf,"Time: %02d.%02d.%02d\r\n",CurrentTime.Hours,CurrentTime.Minutes,CurrentTime.Seconds);
+	send_uart_message(buf);
 }
 
 /* USER CODE END 4 */
