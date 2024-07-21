@@ -79,6 +79,8 @@ char buf[BUFFER_SIZE];
 char uart1_rx_buffer[257] = {'0'};
 char uart1_rx_char;
 int rx_index = 0;
+RTC_TimeTypeDef CurrentTime = {0};
+RTC_DateTypeDef CurrentDate = {0};
 
 typedef struct {
     char melodyName[MAX_STRING_SIZE];
@@ -123,7 +125,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -174,14 +175,13 @@ int main(void)
   send_uart_message(buf);
   sprintf(buf,"Time: %02d.%02d.%02d\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds);
   send_uart_message(buf);*/
-  RTC_TimeTypeDef sTime = {0};
-  RTC_DateTypeDef sDate = {0};
   readAndRing(4);
 
   HD44780_Init(2);
   HD44780_Clear();
   HD44780_SetCursor(0,0);
   HD44780_PrintStr("Sync and start");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -217,7 +217,6 @@ int main(void)
 	  	        		rx_index = 0;
 	  	        		send_uart_message("Starting the time parsing");
 	  	        		parseTime();
-
 	  	        		HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
 	  	        		HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
 
@@ -239,7 +238,6 @@ int main(void)
 	  	        	}
 	  	        	else {
 	  	        		send_uart_message("What else?");
-	  	        		parsedTime = false;
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        	}
@@ -356,6 +354,7 @@ static void MX_RTC_Init(void)
 
   RTC_TimeTypeDef sTime = {0};
   RTC_DateTypeDef sDate = {0};
+  RTC_AlarmTypeDef sAlarm = {0};
 
   /* USER CODE BEGIN RTC_Init 1 */
 
@@ -393,9 +392,28 @@ static void MX_RTC_Init(void)
   sDate.WeekDay = RTC_WEEKDAY_MONDAY;
   sDate.Month = RTC_MONTH_JANUARY;
   sDate.Date = 0x1;
-  sDate.Year = 0x0;
+  sDate.Year = 0x1;
 
   if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Enable the Alarm A
+  */
+  sAlarm.AlarmTime.Hours = 0x0;
+  sAlarm.AlarmTime.Minutes = 0x0;
+  sAlarm.AlarmTime.Seconds = 0x0;
+  sAlarm.AlarmTime.SubSeconds = 0x0;
+  sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+  sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
+  sAlarm.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY|RTC_ALARMMASK_HOURS
+                              |RTC_ALARMMASK_MINUTES;
+  sAlarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
+  sAlarm.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
+  sAlarm.AlarmDateWeekDay = 0x1;
+  sAlarm.Alarm = RTC_ALARM_A;
+  if (HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BCD) != HAL_OK)
   {
     Error_Handler();
   }
@@ -505,6 +523,8 @@ void process_json_events(const char *event) {
 	const cJSON *document = NULL;
 	const cJSON *fields = NULL;
 	const cJSON *field = NULL;
+	eventCount = 0;
+
     cJSON *event_json = cJSON_Parse(event);
     if (event_json == NULL)
     {
@@ -517,7 +537,7 @@ void process_json_events(const char *event) {
     }
 
     char *string = cJSON_Print(event_json);
-    // send_uart_message(string);
+    //send_uart_message(string);
 
     documents = cJSON_GetObjectItemCaseSensitive(event_json, "documents");
         cJSON_ArrayForEach(document, documents)
@@ -535,34 +555,48 @@ void process_json_events(const char *event) {
 			{
 				strncpy(melodyNameString, melodyNameValue->valuestring, MAX_STRING_SIZE - 1);
 			}
+			else {
+				send_uart_message("Error when parsing melodyName");
+				goto end;
+			}
 
             send_uart_message("Melody name: ");
-            send_uart_message(cJSON_Print(melodyNameValue));
+            send_uart_message(melodyNameString);
             send_uart_message("\n");
 
 			// Melody number
 			cJSON *melodyNumber = cJSON_GetObjectItemCaseSensitive(fields, "melodyNumber");
 			cJSON *melodyNumberValue = cJSON_GetObjectItemCaseSensitive(melodyNumber, "integerValue");
+
+
 			if (cJSON_IsString(melodyNumberValue) && melodyNumberValue->valuestring != NULL)
 			{
-				melodyNumberInt = atoi(melodyNumberValue->valuestring);
+			    melodyNumberInt = atoi( melodyNumberValue->valuestring);
+			}else {
+				send_uart_message("Error when parsing melodyNumber");
+				goto end;
 			}
 
             send_uart_message("Melody number: ");
-            send_uart_message(cJSON_Print(melodyNumberValue));
+            sprintf(buf,"%d",melodyNumberInt);
+            send_uart_message(buf);
             send_uart_message("\n");
 
 			// Time
             cJSON *time = cJSON_GetObjectItemCaseSensitive(fields, "time");
             cJSON *timeValue = cJSON_GetObjectItemCaseSensitive(time, "timestampValue");
 
-            if (cJSON_IsString(timeValue) && timeValue->string != NULL)
+            if (cJSON_IsString(timeValue) && timeValue->valuestring != NULL)
             {
             	strncpy(timeString, timeValue->valuestring, MAX_STRING_SIZE - 1);
-            }
+            }else {
+				send_uart_message("Error when parsing time");
+				goto end;
+			}
+
 
             send_uart_message("Time: ");
-            send_uart_message(cJSON_Print(timeValue));
+            send_uart_message(timeString);
             send_uart_message("\n");
 
             // Create an event and add it to the array
@@ -582,29 +616,47 @@ void process_json_events(const char *event) {
 
 
 void parseEvents(){
-	char *jsonEvents = NULL;
-	int rx_index = 0;
-	bool received = false;
-	while(!received){
-		if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK){
-			uart1_rx_buffer[rx_index++] = uart1_rx_char;
-			if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)){
-				uart1_rx_buffer[rx_index - 1] = '\0';
-				if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
-					received = true;
-					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
-					rx_index = 0;
-					break;
-				}
-				else {
-					jsonEvents = strncat(jsonEvents,uart1_rx_buffer,sizeof(uart1_rx_buffer)-1);
-					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
-					rx_index = 0;
-				}
+	bool received;
+    size_t jsonBufferSize = 1024;
+    char *jsonEvents = (char *)malloc(jsonBufferSize);
+    if (jsonEvents == NULL) {
+        // Handle memory allocation failure
+        return;
+    }
+    jsonEvents[0] = '\0'; // Initialize the buffer with an empty string
 
-			}
-		}
-	}
+    while(!received) {
+        if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK) {
+            uart1_rx_buffer[rx_index++] = uart1_rx_char;
+            if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)) {
+                uart1_rx_buffer[rx_index - 1] = '\0';
+                if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
+                    received = true;
+                    memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+                    //strcat(jsonEvents,"}");
+                    send_uart_message("events parsing ended!");
+                    rx_index = 0;
+                    break;
+                } else {
+                    //uart1_rx_buffer[rx_index - 2] = '\0'; // Removing \r
+                    size_t newLength = strlen(jsonEvents) + strlen((char *)uart1_rx_buffer) + 1;
+                    if (newLength > jsonBufferSize) {
+                        jsonBufferSize = newLength * 2; // Increase buffer size
+                        char *newJsonEvents = (char *)realloc(jsonEvents, jsonBufferSize);
+                        if (newJsonEvents == NULL) {
+                            // Handle memory allocation failure
+                            free(jsonEvents);
+                            return;
+                        }
+                        jsonEvents = newJsonEvents;
+                    }
+                    strcat(jsonEvents, uart1_rx_buffer);
+                    memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+                    rx_index = 0;
+                }
+            }
+        }
+    }
 	process_json_events(jsonEvents);
 }
 
@@ -731,7 +783,7 @@ void parseTime(){
 				uart1_rx_buffer[rx_index++] = uart1_rx_char;
 				if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)) {
 					uart1_rx_buffer[rx_index - 1] = '\0';
-					if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
+					if (strncmp((char *)uart1_rx_buffer, "---",3) == 0) {
 						memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 						send_uart_message("Time parsing ended!");
 						rx_index = 0;
@@ -799,22 +851,22 @@ void process_json_time(const char* time){
 	}
 	else{
 		if (weekDay = 0) weekDay = 7;
-		sTime.Hours = (uint8_t) hour_num;
-		sTime.Minutes = (uint8_t) minutes_num;
-		sTime.Seconds = (uint8_t) seconds_num;
-		sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-		sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-		if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+		CurrentTime.Hours = (uint8_t) hour_num;
+		CurrentTime.Minutes = (uint8_t) minutes_num;
+		CurrentTime.Seconds = (uint8_t) seconds_num;
+		CurrentTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+		CurrentTime.StoreOperation = RTC_STOREOPERATION_RESET;
+		if (HAL_RTC_SetTime(&hrtc, &CurrentTime, RTC_FORMAT_BCD) != HAL_OK)
 		{
 			send_uart_message("Error parsing time 1");
 			Error_Handler();
 		}
-		sDate.WeekDay = (uint8_t)weekDay_num;
-		sDate.Month = (uint8_t)yearMonth_num+1;
-		sDate.Date = (uint8_t)monthDay_num;
-		sDate.Year = (uint8_t)year_num%100;
+		CurrentDate.WeekDay = (uint8_t)weekDay_num;
+		CurrentDate.Month = (uint8_t)yearMonth_num+1;
+		CurrentDate.Date = (uint8_t)monthDay_num;
+		CurrentDate.Year = (uint8_t)year_num%100;
 
-		if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+		if (HAL_RTC_SetDate(&hrtc, &CurrentDate, RTC_FORMAT_BCD) != HAL_OK)
 		{
 			send_uart_message("Error parsing time 2");
 			Error_Handler();
@@ -838,6 +890,25 @@ void RTC_to_ISO8601(RTC_DateTypeDef *date, RTC_TimeTypeDef *time, char *buffer) 
              time->Hours,
              time->Minutes,
              time->Seconds);
+}
+
+void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtcAlarm){
+	HAL_RTC_GetTime(&hrtc, &CurrentTime, RTC_FORMAT_BCD);
+	HAL_RTC_GetDate(&hrtc, &CurrentDate, RTC_FORMAT_BCD);
+
+
+	sprintf(buf,"Date: %02d.%02d.%02d\t",CurrentDate.Date,CurrentDate.Month,CurrentDate.Year);
+	send_uart_message(buf);
+	sprintf(buf,"Time: %02d.%02d.%02d\r\n",CurrentTime.Hours+2,CurrentTime.Minutes,CurrentTime.Seconds);
+	send_uart_message(buf);
+
+	RTC_to_ISO8601(&CurrentDate,&CurrentTime,buf);
+	if (eventCount > 0){
+		if (strcmp(buf,events[0].time)== 0){
+			readAndRing(events[0].melodyNumber);
+		}
+	}
+
 }
 
 /* USER CODE END 4 */
