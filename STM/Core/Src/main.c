@@ -1224,9 +1224,9 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtcAlarm){
 	HAL_RTC_GetDate(&hrtc, &CurrentDate, RTC_FORMAT_BCD);
 
 	RTC_to_ISO8601(&CurrentDate,&CurrentTime,buf);
-	if (true){
-		if (true){
-			readAndRing(2);
+	if (eventCount > 0){
+		if (strcmp(buf,events[0].time)== 0){
+			readAndRing(events[0].melodyNumber);
 		}
 	}
 
