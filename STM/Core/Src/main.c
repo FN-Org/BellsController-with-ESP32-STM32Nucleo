@@ -67,6 +67,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
 RTC_HandleTypeDef hrtc;
 
 UART_HandleTypeDef huart1;
@@ -96,106 +98,13 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_RTC_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-/*const char *jsonEx =
-    "{\n"
-    "  \"documents\": [\n"
-    "    {\n"
-    "      \"name\": \"projects/bellapp-b7a2b/databases/(default)/documents/systems/J28ld8tCvTi0QNdYyZKF/events/CcZx2lvtFXvvBCsLmit5\",\n"
-    "      \"fields\": {\n"
-    "        \"color\": {\n"
-    "          \"integerValue\": \"2\"\n"
-    "        },\n"
-    "        \"id\": {\n"
-    "          \"stringValue\": \"CcZx2lvtFXvvBCsLmit5\"\n"
-    "        },\n"
-    "        \"time\": {\n"
-    "          \"timestampValue\": \"2024-08-01T13:03:00Z\"\n"
-    "        },\n"
-    "        \"melodyNumber\": {\n"
-    "          \"integerValue\": \"1\"\n"
-    "        },\n"
-    "        \"melodyName\": {\n"
-    "          \"stringValue\": \"Compleanno\"\n"
-    "        }\n"
-    "      },\n"
-    "      \"createTime\": \"2024-07-06T16:03:15.493477Z\",\n"
-    "      \"updateTime\": \"2024-07-06T16:03:15.493477Z\"\n"
-    "    },\n"
-    "    {\n"
-    "      \"name\": \"projects/bellapp-b7a2b/databases/(default)/documents/systems/J28ld8tCvTi0QNdYyZKF/events/F9WztPqVo0CQqFF1Vlrk\",\n"
-    "      \"fields\": {\n"
-    "        \"melodyNumber\": {\n"
-    "          \"integerValue\": \"3\"\n"
-    "        },\n"
-    "        \"melodyName\": {\n"
-    "          \"stringValue\": \"Ciabatta\"\n"
-    "        },\n"
-    "        \"color\": {\n"
-    "          \"integerValue\": \"1\"\n"
-    "        },\n"
-    "        \"id\": {\n"
-    "          \"stringValue\": \"F9WztPqVo0CQqFF1Vlrk\"\n"
-    "        },\n"
-    "        \"time\": {\n"
-    "          \"timestampValue\": \"2024-08-03T10:03:00Z\"\n"
-    "        }\n"
-    "      },\n"
-    "      \"createTime\": \"2024-07-06T16:03:52.335451Z\",\n"
-    "      \"updateTime\": \"2024-07-06T16:03:52.335451Z\"\n"
-    "    },\n"
-    "    {\n"
-    "      \"name\": \"projects/bellapp-b7a2b/databases/(default)/documents/systems/J28ld8tCvTi0QNdYyZKF/events/rzesraYruWmiMLMu0JAu\",\n"
-    "      \"fields\": {\n"
-    "        \"time\": {\n"
-    "          \"timestampValue\": \"2024-08-03T10:03:00Z\"\n"
-    "        },\n"
-    "        \"id\": {\n"
-    "          \"stringValue\": \"rzesraYruWmiMLMu0JAu\"\n"
-    "        },\n"
-    "        \"melodyName\": {\n"
-    "          \"stringValue\": \"Ciabatta\"\n"
-    "        },\n"
-    "        \"melodyNumber\": {\n"
-    "          \"integerValue\": \"3\"\n"
-    "        },\n"
-    "        \"color\": {\n"
-    "          \"integerValue\": \"2\"\n"
-    "        }\n"
-    "      },\n"
-    "      \"createTime\": \"2024-07-06T16:04:06.580543Z\",\n"
-    "      \"updateTime\": \"2024-07-06T16:04:06.580543Z\"\n"
-    "    },\n"
-    "    {\n"
-    "      \"name\": \"projects/bellapp-b7a2b/databases/(default)/documents/systems/J28ld8tCvTi0QNdYyZKF/events/s7uMQqpkZi2fCahZesnR\",\n"
-    "      \"fields\": {\n"
-    "        \"time\": {\n"
-    "          \"timestampValue\": \"2024-08-02T04:00:00Z\"\n"
-    "        },\n"
-    "        \"melodyName\": {\n"
-    "          \"stringValue\": \"Pasquale\"\n"
-    "        },\n"
-    "        \"id\": {\n"
-    "          \"stringValue\": \"s7uMQqpkZi2fCahZesnR\"\n"
-    "        },\n"
-    "        \"color\": {\n"
-    "          \"integerValue\": \"3\"\n"
-    "        },\n"
-    "        \"melodyNumber\": {\n"
-    "          \"integerValue\": \"2\"\n"
-    "        }\n"
-    "      },\n"
-    "      \"createTime\": \"2024-07-06T16:03:38.019557Z\",\n"
-    "      \"updateTime\": \"2024-07-06T16:03:38.019557Z\"\n"
-    "    }\n"
-    "  ]\n"
-    "}";
-
 
 /* USER CODE END 0 */
 
@@ -230,40 +139,9 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   MX_RTC_Init();
+  MX_I2C1_Init();
+
   /* USER CODE BEGIN 2 */
-  // Simulate receiving JSON message
-   //process_json_events(jsonEx);
-/*
-   for (int i = 0; i < eventCount; i++)
-   {
-	   send_uart_message(events[i].melodyName);
-	   send_uart_message("\n");
-	   sprintf(buf, "%i\r\n", events[i].melodyNumber);
-	   send_uart_message(buf);
-	   send_uart_message(events[i].time);
-	   send_uart_message("\n");
-   }
-   char* debugString;
-
-   char *data = "hello FLASH from ControllerTech\
-   			  This is a test to see how many words can we work with";
-
-   uint32_t data2[] = {0x1,0x2,0x3,0x4,0x5,0x6,0x7,0x8,0x9};
-
-   uint32_t Rx_Data[30];
-
-   char string[100];
-*/
-   //int number = 0;
-
-   //float val = 123.456;
-
-   //float val2 = 0;
-
-   //float val1;
-
-   //Flash_Write_Data(0x08010002 , (uint32_t *)data2, 9);
-   //Flash_Read_Data(0x08010002 , Rx_Data, 10);
 
 /*
      int numofwords = (strlen(data)/4)+((strlen(data)%4)!=0);
@@ -298,6 +176,12 @@ int main(void)
   sprintf(buf,"Time: %02d.%02d.%02d\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds);
   send_uart_message(buf);*/
   readAndRing(4);
+
+  HD44780_Init(2);
+  HD44780_Clear();
+  HD44780_SetCursor(0,0);
+  HD44780_PrintStr("Sync and start");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -333,6 +217,18 @@ int main(void)
 	  	        		rx_index = 0;
 	  	        		send_uart_message("Starting the time parsing");
 	  	        		parseTime();
+	  	        		HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
+	  	        		HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
+
+	  	        		HD44780_Clear();
+
+	  	        		sprintf(buf,"Date: %02d.%02d.%02d",sDate.Date,sDate.Month,sDate.Year);
+						HD44780_SetCursor(0,0);
+						HD44780_PrintStr(buf);
+
+	  	        		sprintf(buf,"Time: %02d.%02d.%02d",sTime.Hours,sTime.Minutes,sTime.Seconds);
+						HD44780_SetCursor(0,1);
+						HD44780_PrintStr(buf);
 	  	        	}
 	  	        	else if (strcmp((char *)uart1_rx_buffer, "-S-\r") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
@@ -408,6 +304,40 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
 }
 
 /**
@@ -571,6 +501,7 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
