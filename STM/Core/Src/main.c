@@ -161,8 +161,8 @@ int main(void)
 
 	Flash_Write_Data(MemoryStartAddress,(uint32_t *) data,1);
 */
-  EraseFlashSector(MemoryStartAddress);
-  EraseFlashSector(NumberMelodiesMemoryAddress);
+  //EraseFlashSector(MemoryStartAddress);
+  //EraseFlashSector(NumberMelodiesMemoryAddress);
 /*
   RTC_TimeTypeDef sTime = {0};
   RTC_DateTypeDef sDate = {0};
@@ -175,12 +175,12 @@ int main(void)
   send_uart_message(buf);
   sprintf(buf,"Time: %02d.%02d.%02d\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds);
   send_uart_message(buf);*/
-  readAndRing(4);
 
   HD44780_Init(2);
   HD44780_Clear();
   HD44780_SetCursor(0,0);
   HD44780_PrintStr("Sync and start");
+  readAndRing(3);
 
   /* USER CODE END 2 */
 
@@ -894,6 +894,12 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtcAlarm){
 	HAL_RTC_GetTime(&hrtc, &CurrentTime, RTC_FORMAT_BCD);
 	HAL_RTC_GetDate(&hrtc, &CurrentDate, RTC_FORMAT_BCD);
 
+	RTC_to_ISO8601(&CurrentDate,&CurrentTime,buf);
+	if (eventCount > 0){
+		if (strcmp(buf,events[0].time)== 0){
+			readAndRing(events[0].melodyNumber);
+		}
+	}
 
 	HD44780_Clear();
 
@@ -904,13 +910,6 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtcAlarm){
 	sprintf(buf,"Time: %02d.%02d",CurrentTime.Hours+2,CurrentTime.Minutes,CurrentTime.Seconds);
 	HD44780_SetCursor(0,1);
 	HD44780_PrintStr(buf);
-
-	RTC_to_ISO8601(&CurrentDate,&CurrentTime,buf);
-	if (eventCount > 0){
-		if (strcmp(buf,events[0].time)== 0){
-			readAndRing(events[0].melodyNumber);
-		}
-	}
 
 }
 
