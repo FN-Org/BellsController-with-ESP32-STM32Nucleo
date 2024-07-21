@@ -17,7 +17,7 @@
 
 //########################################################################################
 // Global Variables//
-#define SENDING_INTERVAL 60000
+#define SENDING_INTERVAL 120000
 // Other global variables
 unsigned long dataMillis = 0;
 bool first_time = true;
@@ -30,7 +30,7 @@ const int daylightOffset_sec = 3600;  // Ora legale
 
 
 
-unsigned long last_time_sent = 30000;
+unsigned long last_time_sent = 0;
 
 //#########################################################################################################
 // SETUP//
@@ -159,7 +159,7 @@ void loop() {
         Serial2.println("---");
         delay(100);
         Serial2.println("-E-");
-
+        
         sendPackets(256, payloadCleaned);
 
         Serial2.println("---");
@@ -167,7 +167,7 @@ void loop() {
         printError(aClient.lastError().code(), aClient.lastError().message());
     }
 
-    if (millis() - last_time_sent > SENDING_INTERVAL) {
+    if (millis() - last_time_sent> SENDING_INTERVAL*1.3) {
       currentTimeSending();
       last_time_sent = millis();
     }

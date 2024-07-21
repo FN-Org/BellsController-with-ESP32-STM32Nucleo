@@ -298,7 +298,6 @@ int main(void)
   sprintf(buf,"Time: %02d.%02d.%02d\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds);
   send_uart_message(buf);*/
   readAndRing(4);
-  bool parsedTime = false;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -334,7 +333,6 @@ int main(void)
 	  	        		rx_index = 0;
 	  	        		send_uart_message("Starting the time parsing");
 	  	        		parseTime();
-	  	        		parsedTime = true;
 	  	        	}
 	  	        	else if (strcmp((char *)uart1_rx_buffer, "-S-\r") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
@@ -344,26 +342,11 @@ int main(void)
 	  	        	}
 	  	        	else {
 	  	        		send_uart_message("What else?");
-	  	        		parsedTime = false;
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        	}
 	  	         }
 	  	     }
-
-	//Time debug
-	  if (parsedTime){
-	    HAL_RTC_GetTime(&hrtc, &CurrentTime, RTC_FORMAT_BCD);
-	    HAL_RTC_GetDate(&hrtc, &CurrentDate, RTC_FORMAT_BCD);
-
-
-	    sprintf(buf,"Date: %02d.%02d.%02d\t",CurrentDate.Date,CurrentDate.Month,CurrentDate.Year);
-	    send_uart_message(buf);
-	    sprintf(buf,"Time: %02d.%02d.%02d\r\n",CurrentTime.Hours,CurrentTime.Minutes,CurrentTime.Seconds);
-	    send_uart_message(buf);
-
-	    parsedTime = false;
-	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -609,6 +592,8 @@ void process_json_events(const char *event) {
 	const cJSON *document = NULL;
 	const cJSON *fields = NULL;
 	const cJSON *field = NULL;
+	eventCount = 0;
+
     cJSON *event_json = cJSON_Parse(event);
     if (event_json == NULL)
     {
@@ -621,7 +606,7 @@ void process_json_events(const char *event) {
     }
 
     char *string = cJSON_Print(event_json);
-    // send_uart_message(string);
+    //send_uart_message(string);
 
     documents = cJSON_GetObjectItemCaseSensitive(event_json, "documents");
         cJSON_ArrayForEach(document, documents)
@@ -641,7 +626,7 @@ void process_json_events(const char *event) {
 			}
 
             send_uart_message("Melody name: ");
-            send_uart_message(cJSON_Print(melodyNameValue));
+            send_uart_message(melodyNameString);
             send_uart_message("\n");
 
 			// Melody number
@@ -653,7 +638,8 @@ void process_json_events(const char *event) {
 			}
 
             send_uart_message("Melody number: ");
-            send_uart_message(cJSON_Print(melodyNumberValue));
+            sprintf(buf,"%d",melodyNumberInt);
+            send_uart_message(buf);
             send_uart_message("\n");
 
 			// Time
@@ -666,7 +652,7 @@ void process_json_events(const char *event) {
             }
 
             send_uart_message("Time: ");
-            send_uart_message(cJSON_Print(timeValue));
+            send_uart_message(timeString);
             send_uart_message("\n");
 
             // Create an event and add it to the array
@@ -686,29 +672,47 @@ void process_json_events(const char *event) {
 
 
 void parseEvents(){
-	char *jsonEvents = NULL;
-	int rx_index = 0;
-	bool received = false;
-	while(!received){
-		if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK){
-			uart1_rx_buffer[rx_index++] = uart1_rx_char;
-			if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)){
-				uart1_rx_buffer[rx_index - 1] = '\0';
-				if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
-					received = true;
-					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
-					rx_index = 0;
-					break;
-				}
-				else {
-					jsonEvents = strncat(jsonEvents,uart1_rx_buffer,sizeof(uart1_rx_buffer)-1);
-					memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
-					rx_index = 0;
-				}
+	bool received;
+    size_t jsonBufferSize = 1024;
+    char *jsonEvents = (char *)malloc(jsonBufferSize);
+    if (jsonEvents == NULL) {
+        // Handle memory allocation failure
+        return;
+    }
+    jsonEvents[0] = '\0'; // Initialize the buffer with an empty string
 
-			}
-		}
-	}
+    while(!received) {
+        if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK) {
+            uart1_rx_buffer[rx_index++] = uart1_rx_char;
+            if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)) {
+                uart1_rx_buffer[rx_index - 1] = '\0';
+                if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
+                    received = true;
+                    memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+                    strcat(jsonEvents,"}");
+                    send_uart_message("events parsing ended!");
+                    rx_index = 0;
+                    break;
+                } else {
+                    uart1_rx_buffer[rx_index - 2] = '\0'; // Removing \r
+                    size_t newLength = strlen(jsonEvents) + strlen((char *)uart1_rx_buffer) + 1;
+                    if (newLength > jsonBufferSize) {
+                        jsonBufferSize = newLength * 2; // Increase buffer size
+                        char *newJsonEvents = (char *)realloc(jsonEvents, jsonBufferSize);
+                        if (newJsonEvents == NULL) {
+                            // Handle memory allocation failure
+                            free(jsonEvents);
+                            return;
+                        }
+                        jsonEvents = newJsonEvents;
+                    }
+                    strcat(jsonEvents, uart1_rx_buffer);
+                    memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+                    rx_index = 0;
+                }
+            }
+        }
+    }
 	process_json_events(jsonEvents);
 }
 
@@ -835,7 +839,7 @@ void parseTime(){
 				uart1_rx_buffer[rx_index++] = uart1_rx_char;
 				if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)) {
 					uart1_rx_buffer[rx_index - 1] = '\0';
-					if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
+					if (strncmp((char *)uart1_rx_buffer, "---",3) == 0) {
 						memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 						send_uart_message("Time parsing ended!");
 						rx_index = 0;
@@ -951,8 +955,16 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtcAlarm){
 
 	sprintf(buf,"Date: %02d.%02d.%02d\t",CurrentDate.Date,CurrentDate.Month,CurrentDate.Year);
 	send_uart_message(buf);
-	sprintf(buf,"Time: %02d.%02d.%02d\r\n",CurrentTime.Hours,CurrentTime.Minutes,CurrentTime.Seconds);
+	sprintf(buf,"Time: %02d.%02d.%02d\r\n",CurrentTime.Hours+2,CurrentTime.Minutes,CurrentTime.Seconds);
 	send_uart_message(buf);
+
+	RTC_to_ISO8601(&CurrentDate,&CurrentTime,buf);
+	if (eventCount > 0){
+		if (strcmp(buf,events[0].time)== 0){
+			readAndRing(events[0].melodyNumber);
+		}
+	}
+
 }
 
 /* USER CODE END 4 */
