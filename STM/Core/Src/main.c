@@ -209,26 +209,16 @@ int main(void)
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        		send_uart_message("Starting the melodies parsing");
+	  	        		__disable_irq();
 	  	        		parseMelodies();
 	  	        		send_uart_message("Returned to main");
+	  	        		__enable_irq();
 	  	        	}
 	  	        	else if (strcmp((char *)uart1_rx_buffer, "-T-\r") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        		send_uart_message("Starting the time parsing");
 	  	        		parseTime();
-	  	        		HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
-	  	        		HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
-
-	  	        		HD44780_Clear();
-
-	  	        		sprintf(buf,"Date: %02d.%02d.%02d",sDate.Date,sDate.Month,sDate.Year);
-						HD44780_SetCursor(0,0);
-						HD44780_PrintStr(buf);
-
-	  	        		sprintf(buf,"Time: %02d.%02d.%02d",sTime.Hours,sTime.Minutes,sTime.Seconds);
-						HD44780_SetCursor(0,1);
-						HD44780_PrintStr(buf);
 	  	        	}
 	  	        	else if (strcmp((char *)uart1_rx_buffer, "-S-\r") == 0){
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
@@ -718,6 +708,7 @@ void parseMelodies(){
 
 
 void readAndRing(int melodyNum){
+	bool tooLong = false;
 	uint32_t melodyStartingAddress = MemoryStartAddress + (melodyNum-1)* MelodySize;
 	uint32_t ReadBuffer[MelodyLineSize/4];
 	int line = 0;
@@ -731,12 +722,19 @@ void readAndRing(int melodyNum){
 
 	Convert_To_Str(ReadBuffer,ReadedString);
 
-	send_uart_message("Starting playing:");
-	send_uart_message(ReadedString);
-
-	//show on display the title
 
 	if ((unsigned char)ReadedString[0] != 0xFF){
+		HD44780_Clear();
+		sprintf(buf,"Reproducing:");
+		HD44780_SetCursor(0,0);
+		HD44780_PrintStr(buf);
+
+		if (sizeof(ReadedString)>16){
+			tooLong = true;
+		}
+		HD44780_SetCursor(0,1);
+		HD44780_PrintStr(ReadedString);
+
 		line++;
 		while(true){
 			melodyLineAddress = melodyStartingAddress + line * MelodyLineSize;
@@ -745,7 +743,9 @@ void readAndRing(int melodyNum){
 			if ((unsigned char)ReadedString[0] == 0xFF) break;
 			note = atoi(ReadedString);
 			duration = atof(ReadedString + 2);
-
+			if (tooLong){
+				HD44780_ScrollDisplayLeft();
+			}
 			play(note,duration);
 
 			line++;
@@ -803,8 +803,6 @@ void parseTime(){
 }
 
 void process_json_time(const char* time){
-	RTC_TimeTypeDef sTime = {0};
-	RTC_DateTypeDef sDate = {0};
 
 	cJSON *time_json = cJSON_Parse(time);
 	if (time_json == NULL)
@@ -897,10 +895,15 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtcAlarm){
 	HAL_RTC_GetDate(&hrtc, &CurrentDate, RTC_FORMAT_BCD);
 
 
-	sprintf(buf,"Date: %02d.%02d.%02d\t",CurrentDate.Date,CurrentDate.Month,CurrentDate.Year);
-	send_uart_message(buf);
-	sprintf(buf,"Time: %02d.%02d.%02d\r\n",CurrentTime.Hours+2,CurrentTime.Minutes,CurrentTime.Seconds);
-	send_uart_message(buf);
+	HD44780_Clear();
+
+	sprintf(buf,"Date: %02d.%02d.%02d",CurrentDate.Date,CurrentDate.Month,CurrentDate.Year);
+	HD44780_SetCursor(0,0);
+	HD44780_PrintStr(buf);
+
+	sprintf(buf,"Time: %02d.%02d",CurrentTime.Hours+2,CurrentTime.Minutes,CurrentTime.Seconds);
+	HD44780_SetCursor(0,1);
+	HD44780_PrintStr(buf);
 
 	RTC_to_ISO8601(&CurrentDate,&CurrentTime,buf);
 	if (eventCount > 0){
