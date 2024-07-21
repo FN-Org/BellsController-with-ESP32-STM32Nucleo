@@ -116,6 +116,7 @@ void loop() {
         Serial.println("Document already existed or error occurred.");
       }
 
+      fetchMelodies();
       if (melodiesNum < melodiesNames.size()) {
         melodiesNum = melodiesNames.size();
         updateMelodies();
