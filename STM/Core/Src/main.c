@@ -136,6 +136,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  HAL_InitTick(0);
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -165,7 +166,7 @@ int main(void)
   HD44780_Clear();
   HD44780_SetCursor(0,0);
   HD44780_PrintStr("Sync and start");
-  readAndRing(2);
+  // readAndRing(2);
 
   /* USER CODE END 2 */
 
@@ -324,7 +325,6 @@ static void MX_RTC_Init(void)
 {
 
   /* USER CODE BEGIN RTC_Init 0 */
-
   /* USER CODE END RTC_Init 0 */
 
   RTC_TimeTypeDef sTime = {0};
@@ -393,7 +393,7 @@ static void MX_RTC_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN RTC_Init 2 */
-
+  HAL_NVIC_SetPriority(RTC_Alarm_IRQn,1,0);
   /* USER CODE END RTC_Init 2 */
 
 }
@@ -1024,27 +1024,31 @@ void readAndRing(int melodyNum){
 
 	char ReadedString[MelodyLineSize];
 
-	send_uart_message("Sono qui 1");
-
 	Flash_Read_Data(melodyStartingAddress,ReadBuffer,(MelodyLineSize-1)/4);
 
 	Convert_To_Str(ReadBuffer,ReadedString);
 
+	size_t length = strlen(ReadedString);
+	for (size_t i = 0; i < length; ++i) {
+	        if (ReadedString[i] == '\r') {
+	            ReadedString[i] = '\0';
+	            break;
+	        }
+	    }
 
 	if ((unsigned char)ReadedString[0] != 0xFF){
+		ReadedString[strlen(ReadedString)] = '\0';
+		if (strlen(ReadedString)>16){
+			tooLong = true;
+		}
 		HD44780_Clear();
 		sprintf(buf,"Reproducing:");
 		HD44780_SetCursor(0,0);
 		HD44780_PrintStr(buf);
-
-		if (sizeof(ReadedString)>16){
-			tooLong = true;
-		}
 		HD44780_SetCursor(0,1);
 		HD44780_PrintStr(ReadedString);
 
 		line++;
-		send_uart_message("Sono qui 2");
 		while(true){
 			melodyLineAddress = melodyStartingAddress + line * MelodyLineSize;
 			Flash_Read_Data(melodyLineAddress,ReadBuffer,MelodyLineSize/4);
@@ -1055,7 +1059,6 @@ void readAndRing(int melodyNum){
 			if (tooLong){
 				HD44780_ScrollDisplayLeft();
 			}
-			send_uart_message("Sono qui 3");
 			play(note,duration);
 
 			line++;
@@ -1064,10 +1067,6 @@ void readAndRing(int melodyNum){
 		send_uart_message("Melody Playing finished");
 	}
 	else send_uart_message("Melody not found!");
-
-
-
-
 }
 
 
@@ -1225,9 +1224,9 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtcAlarm){
 	HAL_RTC_GetDate(&hrtc, &CurrentDate, RTC_FORMAT_BCD);
 
 	RTC_to_ISO8601(&CurrentDate,&CurrentTime,buf);
-	if (eventCount > 0){
-		if (strcmp(buf,events[0].time)== 0){
-			readAndRing(events[0].melodyNumber);
+	if (true){
+		if (true){
+			readAndRing(2);
 		}
 	}
 
