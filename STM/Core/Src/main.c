@@ -624,6 +624,10 @@ void process_json_events(const char *event) {
 			{
 				strncpy(melodyNameString, melodyNameValue->valuestring, MAX_STRING_SIZE - 1);
 			}
+			else {
+				send_uart_message("Error when parsing melodyName");
+				goto end;
+			}
 
             send_uart_message("Melody name: ");
             send_uart_message(melodyNameString);
@@ -632,9 +636,14 @@ void process_json_events(const char *event) {
 			// Melody number
 			cJSON *melodyNumber = cJSON_GetObjectItemCaseSensitive(fields, "melodyNumber");
 			cJSON *melodyNumberValue = cJSON_GetObjectItemCaseSensitive(melodyNumber, "integerValue");
+
+
 			if (cJSON_IsString(melodyNumberValue) && melodyNumberValue->valuestring != NULL)
 			{
-				melodyNumberInt = atoi(melodyNumberValue->valuestring);
+			    melodyNumberInt = atoi( melodyNumberValue->valuestring);
+			}else {
+				send_uart_message("Error when parsing melodyNumber");
+				goto end;
 			}
 
             send_uart_message("Melody number: ");
@@ -646,10 +655,14 @@ void process_json_events(const char *event) {
             cJSON *time = cJSON_GetObjectItemCaseSensitive(fields, "time");
             cJSON *timeValue = cJSON_GetObjectItemCaseSensitive(time, "timestampValue");
 
-            if (cJSON_IsString(timeValue) && timeValue->string != NULL)
+            if (cJSON_IsString(timeValue) && timeValue->valuestring != NULL)
             {
             	strncpy(timeString, timeValue->valuestring, MAX_STRING_SIZE - 1);
-            }
+            }else {
+				send_uart_message("Error when parsing time");
+				goto end;
+			}
+
 
             send_uart_message("Time: ");
             send_uart_message(timeString);
@@ -689,12 +702,12 @@ void parseEvents(){
                 if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
                     received = true;
                     memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
-                    strcat(jsonEvents,"}");
+                    //strcat(jsonEvents,"}");
                     send_uart_message("events parsing ended!");
                     rx_index = 0;
                     break;
                 } else {
-                    uart1_rx_buffer[rx_index - 2] = '\0'; // Removing \r
+                    //uart1_rx_buffer[rx_index - 2] = '\0'; // Removing \r
                     size_t newLength = strlen(jsonEvents) + strlen((char *)uart1_rx_buffer) + 1;
                     if (newLength > jsonBufferSize) {
                         jsonBufferSize = newLength * 2; // Increase buffer size
