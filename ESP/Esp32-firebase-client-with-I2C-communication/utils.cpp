@@ -35,6 +35,8 @@ void currentTimeSending() {
     return;
   }
 
+  Serial2.println("---");
+  delay(100);
   Serial2.println("-T-");
   delay(100);
   String JSON_time = currentTimetoJSOn(&timeinfo);

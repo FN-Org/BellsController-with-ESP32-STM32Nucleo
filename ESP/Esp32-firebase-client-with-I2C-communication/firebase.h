@@ -78,7 +78,7 @@ void fetchMelodies();
 
 void fileCallback(File& file, const char* filename, file_operating_mode mode);
 
-void updateMelodies();
+void updateDBMelodies();
 
 void readAndSendBuffer(int cnt);
 

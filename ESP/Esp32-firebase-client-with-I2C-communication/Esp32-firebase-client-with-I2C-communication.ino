@@ -110,6 +110,8 @@ void loop() {
           Serial.println("Variables written in the SPIFFS");
           fetchMelodies(); // Fetch melodies from Firebase Storage and send them to the STM
           sendSystemInfo();
+          // send Time for the first time
+          currentTimeSending();
         } else {
           Serial.println("Document already existed or error occurred.");
         }
@@ -119,9 +121,10 @@ void loop() {
 
       fetchMelodies();
       sendSystemInfo();
+      currentTimeSending();
       if (melodiesNum < melodiesNames.size()) {
         melodiesNum = melodiesNames.size();
-        updateMelodies();
+        updateDBMelodies();
       }
     }
 

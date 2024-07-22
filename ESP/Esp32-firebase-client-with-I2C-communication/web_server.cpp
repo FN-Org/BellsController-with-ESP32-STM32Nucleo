@@ -14,7 +14,9 @@ String account_password = "";
 String name = "";
 String location = "";
 int bellsNum = 0;
+int melodiesNum = 0;
 int pin = 0;
+String systemId = "";
 
 // Global variables for the access point
 const char* ap_ssid = "ESP32_AP";
@@ -238,6 +240,7 @@ void saveSystemInfo(const String& name, const String& location, const int& bNum,
   file.println(bNum);
   file.println(mNum);
   file.println(pin);
+  file.println(systemId);
   file.close();
 }
 

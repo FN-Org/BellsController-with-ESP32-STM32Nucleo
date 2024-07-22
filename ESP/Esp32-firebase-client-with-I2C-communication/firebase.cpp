@@ -20,11 +20,9 @@ FirebaseJson jsonParser;
 FirebaseJsonData jsonData;
 
 String userUid = "";
-String systemId = "";
 
 bool verified = false;
 
-int melodiesNum = 0;
 std::vector<String> melodiesNames;
 
 /*
@@ -290,13 +288,15 @@ void fetchMelodies() {
     path = startingPath + String(cnt) + ".txt";
     result = storage.download(aClient, FirebaseStorage::Parent(STORAGE_BUCKET_ID, path), getFile(media_file));
 
-    cnt++;
     if (result) {
+      cnt++;
       Serial.println("Object downloaded.");
       readAndSendBuffer(cnt);
     } else
       printError(aClient.lastError().code(), aClient.lastError().message());
   }
+  melodiesNum = cnt;
+  saveSystemInfo(name, location, bellsNum, melodiesNum, pin); // Update the Melodies Number
 }
 
 void fileCallback(File& file, const char* filename, file_operating_mode mode) {
@@ -325,7 +325,7 @@ void fileCallback(File& file, const char* filename, file_operating_mode mode) {
   }
 }
 
-void updateMelodies() {
+void updateDBMelodies() {
 
   String starting_path = "systems/" + systemId + "/melodies/";
 
