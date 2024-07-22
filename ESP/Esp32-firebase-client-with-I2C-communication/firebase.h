@@ -95,4 +95,6 @@ bool readProjectInformations();
 
 void readSystemInfo();
 
+void sendSystemInfo();
+
 #endif

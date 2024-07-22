@@ -345,7 +345,7 @@ void updateMelodies() {
 
     if (aClient.lastError().code() == 0) {
       Serial.println("Created doc " + path + "with success");
-      //send to the stm32
+      // Send to the stm32
     } else {
       printError(aClient.lastError().code(), aClient.lastError().message());
     }
@@ -543,4 +543,21 @@ void readSystemInfo() {
     }
   }
   file.close();
+}
+
+void sendSystemInfo() {
+
+  Serial2.println("---");
+  delay(100);
+  Serial2.println("-S-");
+  Serial.println("-S-");
+  delay(1000);
+
+  Serial2.println(systemId);
+  Serial.println(systemId);
+  delay(100);
+  Serial2.println(pin);
+  Serial.println(pin);
+  delay(100);
+  Serial2.println("---");
 }

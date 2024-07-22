@@ -52,13 +52,20 @@
 #define NOTE_G4  392
 
 // Melody save addresses
-#define MemoryStartAddress  0x08020000
+#define MemoryStartAddress  0x08020000 	// 128 Kb sector
 #define MelodySize 2048
-#define MelodyLineSize 28 //28 byte (28 indirizzi), 7 parole
-#define NumberMelodiesMemoryAddress 0x08010000
+#define MelodyLineSize 28 // 28 byte (28 indirizzi), 7 parole
+#define NumberMelodiesMemoryAddress 0x08010000	// 64 Kb sector
+
+// System Info addresses
+#define SystemInfoAddress	0x08040000	// 16 Kb sector
 
 // Time
 #define StartYear 2000
+
+// Button
+bool buttonClicked = false;
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -161,6 +168,8 @@ int main(void)
 
   // EraseFlashSector(MemoryStartAddress);
   // EraseFlashSector(NumberMelodiesMemoryAddress);
+  // EraseFlashSector(0x0800C000);
+  // EraseFlashSector(0x08040000);
 
   HD44780_Init(2);
   HD44780_Clear();
@@ -210,7 +219,7 @@ int main(void)
 	  	        		memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 	  	        		rx_index = 0;
 	  	        		send_uart_message("Starting the system info parsing");
-	  	        		// parseSystem();
+	  	        		parseSystem();
 	  	        	}
 	  	        	else {
 	  	        		send_uart_message("What else?");
@@ -791,13 +800,24 @@ static void MX_USART2_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 /* USER CODE BEGIN MX_GPIO_Init_1 */
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
+
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -868,7 +888,7 @@ void process_json_events(const char *event) {
 			if (cJSON_IsString(melodyNumberValue) && melodyNumberValue->valuestring != NULL)
 			{
 			    melodyNumberInt = atoi( melodyNumberValue->valuestring);
-			}else {
+			} else {
 				send_uart_message("Error when parsing melodyNumber");
 				goto end;
 			}
@@ -1106,13 +1126,12 @@ void parseTime(){
 
 	char jsonTime[128] = {0};
 
-
 	while (true) {
 			if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK) {
 				uart1_rx_buffer[rx_index++] = uart1_rx_char;
 				if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)) {
 					uart1_rx_buffer[rx_index - 1] = '\0';
-					if (strncmp((char *)uart1_rx_buffer, "---",3) == 0) {
+					if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
 						memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 						send_uart_message("Time parsing ended!");
 						rx_index = 0;
@@ -1127,6 +1146,87 @@ void parseTime(){
 					}
 				}
 
+			}
+	}
+}
+
+void parseSystem() {
+	EraseFlashSector(SystemInfoAddress);
+	uint32_t rx_index = 0;
+	uint32_t line = 0;
+	uint32_t write_data[MelodyLineSize/4] = {0};
+	bool received = false;
+	while (!received) {
+			if (HAL_UART_Receive(&huart1, &uart1_rx_char, 1, 100) == HAL_OK) {
+				uart1_rx_buffer[rx_index++] = uart1_rx_char;
+				if (uart1_rx_char == '\n' || rx_index >= sizeof(uart1_rx_buffer)) {
+					uart1_rx_buffer[rx_index - 1] = '\0';
+					if (strcmp((char *)uart1_rx_buffer, "---\r") == 0) {
+						received = true;
+						memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+						send_uart_message("System info received!");
+						rx_index = 0;
+						line = 0;
+					} else {
+						// Conversione di uart1_rx_buffer a write_data
+						for (int i = 0; i < (rx_index + sizeof(uint32_t) - 1) / sizeof(uint32_t); i++) {
+							write_data[i] = ((uint32_t*)uart1_rx_buffer)[i];
+						}
+						// Scrittura dei dati nella memoria Flash
+						int numofwords = (strlen(write_data)/4)+((strlen(write_data)%4)!=0);
+						Flash_Write_Data((SystemInfoAddress + (line * MelodyLineSize)), write_data,numofwords,false);
+
+						// Pulizia del buffer e reset dell'indice
+						memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
+						rx_index = 0;
+						line++;
+					}
+				}
+			}
+		}
+}
+
+void readAndDisplaySystemInfo() {
+	uint32_t ReadBuffer[MelodyLineSize/4];
+
+	char systemId[MelodyLineSize] = {0};
+	char pin[MelodyLineSize] = {0};
+
+	Flash_Read_Data(SystemInfoAddress,ReadBuffer,(MelodyLineSize-1)/4);
+
+	Convert_To_Str(ReadBuffer,systemId);
+
+	Flash_Read_Data(SystemInfoAddress + MelodyLineSize,ReadBuffer,(MelodyLineSize-1)/4);
+
+	Convert_To_Str(ReadBuffer, pin);
+
+	size_t length = strlen(systemId);
+	for (size_t i = 0; i < length; ++i) {
+		if (systemId[i] == '\r') {
+			systemId[i] = '\0';
+			break;
+		}
+	}
+	length = strlen(pin);
+	for (size_t i = 0; i < length; ++i) {
+		if (pin[i] == '\r') {
+			pin[i] = '\0';
+			break;
+		}
+	}
+
+	if ((unsigned char)systemId[0] != 0xFF
+			&& (unsigned char)pin[0] != 0xFF){
+			HD44780_Clear();
+			sprintf(buf,"ID: %s", systemId);
+			HD44780_SetCursor(0,0);
+			HD44780_PrintStr(buf);
+			sprintf(buf,"PIN: %s", pin);
+			HD44780_SetCursor(0,1);
+			HD44780_PrintStr(buf);
+			for (int i=0; i<50; i++) {
+				HD44780_ScrollDisplayLeft();
+				HAL_Delay(1000);
 			}
 	}
 }
@@ -1239,7 +1339,14 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtcAlarm){
 	sprintf(buf,"Time: %02d.%02d",CurrentTime.Hours+2,CurrentTime.Minutes,CurrentTime.Seconds);
 	HD44780_SetCursor(0,1);
 	HD44780_PrintStr(buf);
+}
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if (GPIO_Pin == GPIO_PIN_13) {
+		readAndDisplaySystemInfo();
+	} else {
+		__NOP();
+	}
 }
 
 // Notes
