@@ -63,8 +63,7 @@
 // Time
 #define StartYear 2000
 
-// Button
-bool buttonClicked = false;
+
 
 /* USER CODE END PD */
 
@@ -103,6 +102,9 @@ typedef struct {
 
 Event events[MAX_EVENTS];
 int eventCount = 0;
+
+
+int eventsDone = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -166,16 +168,15 @@ int main(void)
   MX_TIM12_Init();
   /* USER CODE BEGIN 2 */
 
-  // EraseFlashSector(MemoryStartAddress);
-  // EraseFlashSector(NumberMelodiesMemoryAddress);
-  // EraseFlashSector(0x0800C000);
-  // EraseFlashSector(0x08040000);
+  EraseFlashSector(MemoryStartAddress);
+  EraseFlashSector(NumberMelodiesMemoryAddress);
+  EraseFlashSector(SystemInfoAddress);
 
   HD44780_Init(2);
   HD44780_Clear();
   HD44780_SetCursor(0,0);
   HD44780_PrintStr("Sync and start");
-  // readAndRing(2);
+  //readAndRing(1);
 
   /* USER CODE END 2 */
 
@@ -839,7 +840,7 @@ void process_json_events(const char *event) {
 	const cJSON *document = NULL;
 	const cJSON *fields = NULL;
 	const cJSON *field = NULL;
-	eventCount = 0;
+
 
     cJSON *event_json = cJSON_Parse(event);
     if (event_json == NULL)
@@ -852,7 +853,10 @@ void process_json_events(const char *event) {
         goto end;
     }
 
-    char *string = cJSON_Print(event_json);
+    eventsDone = 0;
+    eventCount = 0;
+
+    //char *string = cJSON_Print(event_json);
     //send_uart_message(string);
 
     documents = cJSON_GetObjectItemCaseSensitive(event_json, "documents");
@@ -1324,9 +1328,10 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtcAlarm){
 	HAL_RTC_GetDate(&hrtc, &CurrentDate, RTC_FORMAT_BIN);
 
 	RTC_to_ISO8601(&CurrentDate,&CurrentTime,buf);
-	if (eventCount > 0){
-		if (strcmp(buf,events[0].time)== 0){
-			readAndRing(events[0].melodyNumber);
+	if (eventCount >= eventsDone){
+		if (strcmp(buf,events[eventsDone].time)== 0){
+			readAndRing(events[eventsDone].melodyNumber);
+			eventsDone++;
 		}
 	}
 

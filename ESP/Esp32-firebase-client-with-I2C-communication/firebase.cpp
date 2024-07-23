@@ -18,6 +18,7 @@ FirebaseApp app;
 
 FirebaseJson jsonParser;
 FirebaseJsonData jsonData;
+FirebaseJsonArray jsonArr;
 
 String userUid = "";
 
@@ -44,7 +45,7 @@ bool setupFirebase() {
   // Binding the FirebaseApp for authentication handler.
   // To unbind, use Docs.resetApp();
   initializeApp(aClient, app, getAuth(user_auth), aResult_no_callback);
-  
+
   Serial.println("Sono qui 3");
 
   app.getApp<Firestore::Documents>(Docs);
@@ -218,6 +219,7 @@ bool createSystemDocument() {
   try {
     Serial.println("Create document... ");
     String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), doc_path, DocumentMask("name"), doc);
+    delay(100);
 
     if (aClient.lastError().code() == 0) {
       Serial.println("Document with system information created!");
@@ -256,10 +258,15 @@ bool createSystemDocument() {
           }
         }
       } else {
-        printError(aClient.lastError().code(), aClient.lastError().message());
-        return false;  // For fail
-      }
-    }
+        Serial.println("Failed to extract document ID");
+        return false;
+      }  // For fail
+      jsonParser.clear();
+      jsonData.clear();  // clear the parser
+    } else {
+      printError(aClient.lastError().code(), aClient.lastError().message());
+      return false;
+    }  // For fail
   } catch (std::exception& e) {
     Serial.print("Exception caught: ");
     Serial.println(e.what());
@@ -270,33 +277,40 @@ bool createSystemDocument() {
 
 void fetchMelodies() {
   Serial.println("Get all files...");
-
-  String startingPath = "melodies/" + String(bellsNum) + "/";
-
   int cnt = 1;
-  bool result = true;
+  for (int i = 3; i <= bellsNum; i++) {
+    String startingPath = "melodies/" + String(i) + "/";
 
-  String path = startingPath + String(cnt) + ".txt";
+    int title = 1;
+    bool result = true;
 
-  String buff = "buf.txt";
+    String path = startingPath + String(title) + ".txt";
 
-  FileConfig media_file(buff, fileCallback);
+    String buff = "buf.txt";
 
-  while (result) {
-    Serial.print("Count");
-    Serial.println(cnt);
-    path = startingPath + String(cnt) + ".txt";
-    result = storage.download(aClient, FirebaseStorage::Parent(STORAGE_BUCKET_ID, path), getFile(media_file));
+    FileConfig media_file(buff, fileCallback);
 
-    if (result) {
-      cnt++;
-      Serial.println("Object downloaded.");
-      readAndSendBuffer(cnt);
-    } else
-      printError(aClient.lastError().code(), aClient.lastError().message());
+    while (result) {
+      Serial.print("db Title: ");
+      Serial.println(title);
+      path = startingPath + String(title) + ".txt";
+      result = storage.download(aClient, FirebaseStorage::Parent(STORAGE_BUCKET_ID, path), getFile(media_file));
+
+      if (result) {
+        Serial.println("Object downloaded.");
+        if (cnt > melodiesNum) {
+          readAndSendBuffer();
+         
+        }
+        title++;
+        cnt++;
+
+      } else
+        printError(aClient.lastError().code(), aClient.lastError().message());
+    }
   }
-  melodiesNum = cnt;
-  saveSystemInfo(name, location, bellsNum, melodiesNum, pin); // Update the Melodies Number
+  updateDBMelodies();
+  saveSystemInfo(name, location, bellsNum, default_Nmelodies, pin);  // Update the Melodies Number
 }
 
 void fileCallback(File& file, const char* filename, file_operating_mode mode) {
@@ -378,7 +392,7 @@ void updateDBMelodies() {
   }
 }
 
-void readAndSendBuffer(int cnt) {
+void readAndSendBuffer() {
   File testFile = SPIFFS.open("/buf.txt", "r");
   if (!testFile) {
     Serial.println("File /buf.txt doesn't exists!");
@@ -560,4 +574,59 @@ void sendSystemInfo() {
   Serial.println(pin);
   delay(100);
   Serial2.println("---");
+}
+
+
+void deleteOldEvents() {
+  String collectionId = "systems/" + systemId + "/events";
+
+  String firstTimestamp;
+  ListDocumentsOptions listDocsOptions;
+  listDocsOptions.pageSize(1);
+  listDocsOptions.orderBy("time asc");
+
+  String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
+
+  Serial.println(payload);
+
+  jsonArr.setJsonArrayData(payload);
+
+
+  jsonArr.get(jsonData, "documents/[0]/fields/time/timestampValue");
+
+  if (jsonData.success) {
+    String timestamp = jsonData.stringValue;
+    struct tm timeinfo;
+    jsonData.clear();
+    if (!getLocalTime(&timeinfo)) {
+      Serial.println("Error when trying to get the time.");
+      return;
+    }
+
+    // Convert `struct tm` to ISO 8601 string
+    char currentTime[30];
+    strftime(currentTime, sizeof(currentTime), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
+    Serial.println("Current Time: " + String(currentTime));
+    Serial.println("Timestamp: " + timestamp);
+    int res = strcmp(currentTime, timestamp.c_str());
+    if (res > 0) {
+      jsonArr.get(jsonData, "documents/[0]/fields/id/stringValue");
+      if (jsonData.success) {
+        String id = jsonData.stringValue;
+        Serial.println("Event with id: " + id + String("Should be deleted!"));
+
+        payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId + String("/") + id, Precondition());
+
+        if (aClient.lastError().code() == 0)
+          Serial.println("Deleted with success!");
+        else
+          printError(aClient.lastError().code(), aClient.lastError().message());
+
+      } else {
+        Serial.println("Failed to get the id.");
+      }
+    } else Serial.println("No events to be deleted.");
+  } else {
+    Serial.println("Failed to get the timestamp.");
+  }
 }

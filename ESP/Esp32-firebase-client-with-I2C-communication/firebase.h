@@ -80,7 +80,7 @@ void fileCallback(File& file, const char* filename, file_operating_mode mode);
 
 void updateDBMelodies();
 
-void readAndSendBuffer(int cnt);
+void readAndSendBuffer();
 
 /*
 * @brief Function to receive and save the project informations
@@ -96,5 +96,7 @@ bool readProjectInformations();
 void readSystemInfo();
 
 void sendSystemInfo();
+
+void deleteOldEvents();
 
 #endif

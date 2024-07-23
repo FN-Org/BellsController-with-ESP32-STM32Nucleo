@@ -98,20 +98,7 @@ void loop() {
       if (createSystemDocument()) {
         if (linkUser()) {
           Serial.println("Fatto LINKUSER");
-          // Save the db information in the system_info.txt
-          File file = SPIFFS.open("/system_info.txt", "a");
-          if (!file) {
-            Serial.println("Failed to open file for appending");
-            return;
-          }
-          Serial.println("Aperto file in append");
-          file.println(systemId);
-          file.close();
-          Serial.println("Variables written in the SPIFFS");
-          fetchMelodies(); // Fetch melodies from Firebase Storage and send them to the STM
           sendSystemInfo();
-          // send Time for the first time
-          currentTimeSending();
         } else {
           Serial.println("Document already existed or error occurred.");
         }
@@ -119,13 +106,9 @@ void loop() {
         Serial.println("Document already existed or error occurred.");
       }
 
-      fetchMelodies();
-      sendSystemInfo();
+      fetchMelodies(); // Fetch melodies from firestore db
+      delay(100);
       currentTimeSending();
-      if (melodiesNum < melodiesNames.size()) {
-        melodiesNum = melodiesNames.size();
-        updateDBMelodies();
-      }
     }
 
     if (app.ready() && (millis() - dataMillis > SENDING_INTERVAL || dataMillis == 0)) {
@@ -139,10 +122,14 @@ void loop() {
       // If the collection Id path contains space e.g. "a b/c d/e f"
       // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
 
+      Serial.println("Searching for events to be deleted...");
+      deleteOldEvents();
+
       Serial.println("List the documents in a collection... ");
 
       ListDocumentsOptions listDocsOptions;
       listDocsOptions.pageSize(100);
+      listDocsOptions.orderBy("time asc");
 
       String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
 
@@ -166,7 +153,7 @@ void loop() {
         printError(aClient.lastError().code(), aClient.lastError().message());
     }
 
-    if (millis() - last_time_sent> SENDING_INTERVAL*1.3) {
+    if (millis() - last_time_sent> SENDING_INTERVAL*10) {
       currentTimeSending();
       last_time_sent = millis();
     }
