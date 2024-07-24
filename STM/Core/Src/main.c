@@ -1386,18 +1386,18 @@ void Mi() {
 
 void Fa() {
     HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_1);
-    HAL_UART_Transmit(&huart2, (uint8_t *)"RE Started\n", strlen("RE Started\n"), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart2, (uint8_t *)"FA Started\n", strlen("FA Started\n"), HAL_MAX_DELAY);
     HAL_Delay(500);
     HAL_TIM_PWM_Stop(&htim8, TIM_CHANNEL_1);
-    HAL_UART_Transmit(&huart2, (uint8_t *)"RE Stopped\n", strlen("RE Stopped\n"), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart2, (uint8_t *)"FA Stopped\n", strlen("FA Stopped\n"), HAL_MAX_DELAY);
 }
 
 void Sol() {
     HAL_TIM_PWM_Start(&htim12, TIM_CHANNEL_1);
-    HAL_UART_Transmit(&huart2, (uint8_t *)"MI Started\n", strlen("MI Started\n"), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart2, (uint8_t *)"SOL Started\n", strlen("SOL Started\n"), HAL_MAX_DELAY);
     HAL_Delay(500);
     HAL_TIM_PWM_Stop(&htim12, TIM_CHANNEL_1);
-    HAL_UART_Transmit(&huart2, (uint8_t *)"MI Stopped\n", strlen("M Stopped\n"), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart2, (uint8_t *)"SOL Stopped\n", strlen("SOL Stopped\n"), HAL_MAX_DELAY);
 }
 
 /* USER CODE END 4 */
