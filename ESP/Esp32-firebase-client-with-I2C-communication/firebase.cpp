@@ -300,7 +300,6 @@ void fetchMelodies() {
         Serial.println("Object downloaded.");
         if (cnt > melodiesNum) {
           readAndSendBuffer();
-         
         }
         title++;
         cnt++;
@@ -310,7 +309,6 @@ void fetchMelodies() {
     }
   }
   updateDBMelodies();
-  saveSystemInfo(name, location, bellsNum, default_Nmelodies, pin);  // Update the Melodies Number
 }
 
 void fileCallback(File& file, const char* filename, file_operating_mode mode) {
@@ -364,6 +362,8 @@ void updateDBMelodies() {
       printError(aClient.lastError().code(), aClient.lastError().message());
     }
   }
+
+  melodiesNum = melodiesNames[i];
 
   // Update the SPIFFS
   saveSystemInfo(name, location, bellsNum, melodiesNum, pin);

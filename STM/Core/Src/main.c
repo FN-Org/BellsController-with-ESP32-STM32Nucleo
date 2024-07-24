@@ -168,9 +168,9 @@ int main(void)
   MX_TIM12_Init();
   /* USER CODE BEGIN 2 */
 
-  EraseFlashSector(MemoryStartAddress);
-  EraseFlashSector(NumberMelodiesMemoryAddress);
-  EraseFlashSector(SystemInfoAddress);
+  // EraseFlashSector(MemoryStartAddress);
+  // EraseFlashSector(NumberMelodiesMemoryAddress);
+  // EraseFlashSector(SystemInfoAddress);
 
   HD44780_Init(2);
   HD44780_Clear();
