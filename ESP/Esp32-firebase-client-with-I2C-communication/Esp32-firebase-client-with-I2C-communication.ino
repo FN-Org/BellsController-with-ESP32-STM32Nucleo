@@ -90,6 +90,7 @@ void loop() {
       Serial.println("User UID in the loop: " + userUid);
 
       readSystemInfo();  // It reads the system information from the file in the SPIFFS (system_info.txt)
+      readMelodyTitles(); // It reads the melody titles from the file in the SPIFFS (melody_titles.txt)
 
       // Usiamo systemId nella create document, che la prendiamo dal file. se è vuota ok e se invece non è vuota dovrebbe darci errore.
 

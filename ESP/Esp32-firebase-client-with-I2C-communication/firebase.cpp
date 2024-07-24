@@ -357,13 +357,12 @@ void updateDBMelodies() {
 
     if (aClient.lastError().code() == 0) {
       Serial.println("Created doc " + path + "with success");
-      // Send to the stm32
     } else {
       printError(aClient.lastError().code(), aClient.lastError().message());
     }
   }
 
-  melodiesNum = melodiesNames[i];
+  melodiesNum = melodiesNames.size();
 
   // Update the SPIFFS
   saveSystemInfo(name, location, bellsNum, melodiesNum, pin);
@@ -392,6 +391,29 @@ void updateDBMelodies() {
   }
 }
 
+void saveTitleInSPIFFS(String title) {
+  File file = SPIFFS.open("/melody_titles.txt", "a");
+  if (!file) {
+    Serial.println("Failed to open file for appending");
+    return;
+  }
+  file.println(title);
+  file.close();
+}
+
+void readMelodyTitles() {
+  File testFile = SPIFFS.open("/melody_titles.txt", "r");
+  if (!testFile) {
+    Serial.println("File /buf.txt doesn't exists!");
+    return;
+  }
+  while (testFile.available()) {
+    String melodyTitle = testFile.readStringUntil('\n');
+    melodiesNames.push_back(melodyTitle);
+  }
+  testFile.close();
+}
+
 void readAndSendBuffer() {
   File testFile = SPIFFS.open("/buf.txt", "r");
   if (!testFile) {
@@ -408,6 +430,7 @@ void readAndSendBuffer() {
   Serial2.println(melodyTitle);
   Serial.println(melodyTitle);
   melodiesNames.push_back(melodyTitle);
+  saveTitleInSPIFFS(melodyTitle);
   delay(100);
   String line;
   while (testFile.available()) {
@@ -416,6 +439,7 @@ void readAndSendBuffer() {
     Serial2.println(line);
     delay(100);
   }
+  testFile.close();
   Serial2.println("---");
 }
 
