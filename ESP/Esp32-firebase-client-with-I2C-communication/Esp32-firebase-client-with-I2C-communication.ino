@@ -124,7 +124,6 @@ void loop() {
       // It should encode the space as %20 then the collection Id will be "a%20b/c%20d/e%20f"
 
       Serial.println("Searching for events to be deleted...");
-      deleteOldEvents();
 
       Serial.println("List the documents in a collection... ");
 
@@ -150,6 +149,8 @@ void loop() {
         sendPackets(256, payloadCleaned);
 
         Serial2.println("---");
+
+        deleteOldEvents();
       } else
         printError(aClient.lastError().code(), aClient.lastError().message());
     }
