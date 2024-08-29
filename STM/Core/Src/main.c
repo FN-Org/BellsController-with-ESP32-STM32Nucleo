@@ -63,8 +63,6 @@
 // Time
 #define StartYear 2000
 
-
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -103,8 +101,10 @@ typedef struct {
 Event events[MAX_EVENTS];
 int eventCount = 0;
 
-
 int eventsDone = 0;
+
+bool buttonPressed = false;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -816,7 +816,16 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : CLEAR_FLASH_Pin */
+  GPIO_InitStruct.Pin = CLEAR_FLASH_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(CLEAR_FLASH_GPIO_Port, &GPIO_InitStruct);
+
   /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
@@ -1155,7 +1164,7 @@ void parseTime(){
 }
 
 void parseSystem() {
-	EraseFlashSector(SystemInfoAddress);
+	// EraseFlashSector(SystemInfoAddress);
 	uint32_t rx_index = 0;
 	uint32_t line = 0;
 	uint32_t write_data[MelodyLineSize/4] = {0};
@@ -1192,6 +1201,8 @@ void parseSystem() {
 
 void readAndDisplaySystemInfo() {
 	uint32_t ReadBuffer[MelodyLineSize/4];
+
+	send_uart_message("Display system info");
 
 	char systemId[MelodyLineSize] = {0};
 	char pin[MelodyLineSize] = {0};
@@ -1310,7 +1321,19 @@ void process_json_time(const char* time){
 	      return;
 }
 
-
+void clearFlashMemory() {
+	HD44780_Clear();
+	sprintf(buf,"Clearing flash");
+	HD44780_SetCursor(0,0);
+	HD44780_PrintStr(buf);
+	sprintf(buf,"sectors");
+	HD44780_SetCursor(0,1);
+	HD44780_PrintStr(buf);
+	EraseFlashSector(MemoryStartAddress);
+	EraseFlashSector(NumberMelodiesMemoryAddress);
+	EraseFlashSector(SystemInfoAddress);
+	HAL_Delay(3000);
+}
 
 // Funzione per convertire data e ora RTC in stringa ISO 8601
 void RTC_to_ISO8601(RTC_DateTypeDef *date, RTC_TimeTypeDef *time, char *buffer) {
@@ -1351,11 +1374,16 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtcAlarm){
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-	if (GPIO_Pin == GPIO_PIN_13) {
-		readAndDisplaySystemInfo();
-	} else {
-		__NOP();
-	}
+    if (GPIO_Pin == GPIO_PIN_13) {
+        readAndDisplaySystemInfo();
+    }
+    else if (GPIO_Pin == CLEAR_FLASH_Pin) {
+    	send_uart_message("Button clicked");
+    	clearFlashMemory();
+    }
+    else {
+        __NOP();
+    }
 }
 
 // Notes

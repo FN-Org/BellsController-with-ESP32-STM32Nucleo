@@ -25,6 +25,7 @@ String userUid = "";
 bool verified = false;
 
 std::vector<String> melodiesNames;
+std::vector<String> melodiesList;  // list to memorize all the melodies
 
 /*
 * @brief Function to handle the set up of the connection to the firestore cloud database service
@@ -278,34 +279,61 @@ bool createSystemDocument() {
 void fetchMelodies() {
   Serial.println("Get all files...");
   int cnt = 1;
+  // the index starts from 3 because it is the minimum number of bells 
+  // in a bell tower to reproduce a melody
   for (int i = 3; i <= bellsNum; i++) {
     String startingPath = "melodies/" + String(i) + "/";
 
     int title = 1;
     bool result = true;
 
-    String path = startingPath + String(title) + ".txt";
-
-    String buff = "buf.txt";
-
-    FileConfig media_file(buff, fileCallback);
-
     while (result) {
       Serial.print("db Title: ");
       Serial.println(title);
-      path = startingPath + String(title) + ".txt";
+      String path = startingPath + String(title) + ".txt";
+      Serial.print("Downloading from path: ");
+      Serial.println(path);
+      String buff = "buf.txt";
+
+      FileConfig media_file(buff, fileCallback);
+
       result = storage.download(aClient, FirebaseStorage::Parent(STORAGE_BUCKET_ID, path), getFile(media_file));
 
       if (result) {
         Serial.println("Object downloaded.");
-        if (cnt > melodiesNum) {
-          readAndSendBuffer();
+        File testFile = SPIFFS.open("/buf.txt", "r");
+        if (testFile) {
+          String fileContent = testFile.readString();  // Leggi tutto il contenuto del file
+          melodiesList.push_back(fileContent);        // Aggiungi il contenuto alla lista
+          testFile.close();
+        } else {
+          Serial.println("Failed to open the downloaded file.");
         }
         title++;
         cnt++;
-
-      } else
+      } else {
         printError(aClient.lastError().code(), aClient.lastError().message());
+      }
+    }
+  }
+
+  // Controlla se ci sono più melodie nella lista rispetto a quelle esistenti
+  Serial.print("Numero melodie precedenti: ");
+  Serial.println(melodiesNum);
+  Serial.print("Numero nuove melodie: ");
+  Serial.println(melodiesList.size());
+  if (melodiesList.size() > melodiesNum) {
+    for (const String& melody : melodiesList) {
+      // Salva il contenuto in "buf.txt"
+      File file = SPIFFS.open("/buf.txt", "w");
+      if (file) {
+        file.print(melody);
+        file.close();
+        delay(1000);
+        readAndSendBuffer();  // Invia la melodia
+      } else {
+        Serial.println("Failed to open /buf.txt for writing.");
+      }
     }
   }
   updateDBMelodies();
@@ -386,6 +414,8 @@ void updateDBMelodies() {
 
   if (aClient.lastError().code() == 0) {
     Serial.println("Update of the melodies number on the db successful");
+    melodiesList.clear();
+    melodiesNames.clear();
   } else {
     printError(aClient.lastError().code(), aClient.lastError().message());
   }
