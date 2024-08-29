@@ -74,17 +74,6 @@ void setup() {
 
       // Configura il pin del bottone come input con resistenza di pull-up
       pinMode(BUTTON_PIN, INPUT_PULLUP);
-
-      // Verifica lo stato del pulsante al momento dell'avvio e aspetta che venga rilasciato
-      Serial.println("Waiting for button release...");
-      while (digitalRead(BUTTON_PIN) == LOW) {
-        // Se il pulsante è premuto, aspetta che venga rilasciato
-        delay(10);  // Piccolo ritardo per evitare che il loop consumi troppe risorse
-      }
-
-      // Ora che il pulsante è rilasciato, possiamo configurare l'interrupt
-      Serial.println("Button released, setting up interrupt...");
-      attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), onButtonPress, FALLING);
     }
   } else {
     ReceiveandSaveProjectInformations();
@@ -118,7 +107,7 @@ void loop() {
       Serial.println("User UID in the loop: " + userUid);
 
       readSystemInfo();    // It reads the system information from the file in the SPIFFS (system_info.txt)
-      readMelodyTitles();  // It reads the melody titles from the file in the SPIFFS (melody_titles.txt)
+      // readMelodyTitles();  // It reads the melody titles from the file in the SPIFFS (melody_titles.txt)
 
       // Usiamo systemId nella create document, che la prendiamo dal file. se è vuota ok e se invece non è vuota dovrebbe darci errore.
 
@@ -142,22 +131,33 @@ void loop() {
       currentTimeSending();
     }
 
-    if (buttonPressed) {
+    // Reaload SYSTEM INFO, MELODIES, CURRENT TIME
+    if (digitalRead(BUTTON_PIN) == HIGH) {
       buttonPressed = false;
       Serial.println("ESP button pressed!");
-      delay(3000); // Wait for STM32 erasing flash sectors
+      delay(10000); // Wait for STM32 erasing flash sectors
 
       Serial2.println("---");
+      delay(100);
+
+      sendSystemInfo();
       delay(500);
-      Serial2.println("-B-");
-      delay(1000);
       fetchMelodies();
       delay(500);
-      sendSystemInfo();
+      currentTimeSending();
+
       delay(100);
       Serial2.println("---");
+
+      /*
+      // Aspetta che il pulsante venga rilasciato prima di procedere
+      while (digitalRead(BUTTON_PIN) == LOW) {
+        delay(10);  // Evita un loop troppo veloce
+      }
+      */
     }
 
+    // Invio EVENTS
     if (app.ready() && (millis() - dataMillis > SENDING_INTERVAL || dataMillis == 0)) {
       dataMillis = millis();
 
@@ -199,6 +199,7 @@ void loop() {
         printError(aClient.lastError().code(), aClient.lastError().message());
     }
 
+    // Invio CURRENT TIME
     if (millis() - last_time_sent > SENDING_INTERVAL * 10) {
       currentTimeSending();
       last_time_sent = millis();

@@ -80,9 +80,11 @@ void fileCallback(File& file, const char* filename, file_operating_mode mode);
 
 void updateDBMelodies();
 
+/*
 void saveTitleInSPIFFS(String title);
 
 void readMelodyTitles();
+*/
 
 void readAndSendBuffer();
 

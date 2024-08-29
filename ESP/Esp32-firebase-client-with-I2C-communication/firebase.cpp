@@ -402,7 +402,7 @@ void updateDBMelodies() {
   file.println(systemId);
   file.close();
 
-  // Update the firestore db
+  // Update the firestore db for the number of melodies
   path = "systems/" + systemId;
   Values::IntegerValue nMelodies(melodiesNum);
   Document<Values::Value> update("nMelodies", Values::Value(nMelodies));
@@ -421,6 +421,7 @@ void updateDBMelodies() {
   }
 }
 
+/*
 void saveTitleInSPIFFS(String title) {
   File file = SPIFFS.open("/melody_titles.txt", "a");
   if (!file) {
@@ -443,6 +444,7 @@ void readMelodyTitles() {
   }
   testFile.close();
 }
+*/
 
 void readAndSendBuffer() {
   File testFile = SPIFFS.open("/buf.txt", "r");
@@ -460,7 +462,7 @@ void readAndSendBuffer() {
   Serial2.println(melodyTitle);
   Serial.println(melodyTitle);
   melodiesNames.push_back(melodyTitle);
-  saveTitleInSPIFFS(melodyTitle);
+  // saveTitleInSPIFFS(melodyTitle);
   delay(100);
   String line;
   while (testFile.available()) {
@@ -629,7 +631,6 @@ void sendSystemInfo() {
   delay(100);
   Serial2.println("---");
 }
-
 
 void deleteOldEvents() {
   String collectionId = "systems/" + systemId + "/events";
