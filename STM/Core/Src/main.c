@@ -176,6 +176,14 @@ int main(void)
   HD44780_Clear();
   HD44780_SetCursor(0,0);
   HD44780_PrintStr("Sync and start");
+  HAL_Delay(3000);
+  HD44780_SetCursor(0,0);
+  HD44780_PrintStr("Press button");
+  HD44780_SetCursor(0,1);
+  HD44780_PrintStr("to sync melodies");
+  while (!buttonPressed) {
+	  HAL_Delay(10); // Avoid too fast loop
+  }
   //readAndRing(1);
 
   /* USER CODE END 2 */
@@ -1002,7 +1010,6 @@ void parseMelodies(){
 		melodiesNum = 0;
 	}
 
-
 	// Calcola l'indirizzo di salvataggio della melodia
 	uint32_t melodySavingAddress = MemoryStartAddress + (melodiesNum * MelodySize);
 
@@ -1379,6 +1386,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
     }
     else if (GPIO_Pin == CLEAR_FLASH_Pin) {
     	send_uart_message("Button clicked");
+    	buttonPressed = true;
     	clearFlashMemory();
     }
     else {

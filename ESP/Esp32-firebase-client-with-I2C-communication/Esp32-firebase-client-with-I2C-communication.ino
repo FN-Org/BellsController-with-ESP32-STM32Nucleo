@@ -106,7 +106,7 @@ void loop() {
       userUid = app.getUid();
       Serial.println("User UID in the loop: " + userUid);
 
-      readSystemInfo();    // It reads the system information from the file in the SPIFFS (system_info.txt)
+      readSystemInfo();  // It reads the system information from the file in the SPIFFS (system_info.txt)
       // readMelodyTitles();  // It reads the melody titles from the file in the SPIFFS (melody_titles.txt)
 
       // Usiamo systemId nella create document, che la prendiamo dal file. se è vuota ok e se invece non è vuota dovrebbe darci errore.
@@ -124,18 +124,32 @@ void loop() {
         Serial.println("Document already existed or error occurred.");
       }
 
-      sendSystemInfo();
+      Serial.println("Waiting for the button to be pressed");
+      // Waiting for a sync button press
+      while (digitalRead(BUTTON_PIN) == LOW) {
+        delay(10);  // Avoid a loop too fast
+      }
+      Serial.println("Sync button pressed");
+      delay(10000);
+
+      Serial2.println("---");
+      delay(100);
+
+      sendSystemInfo();  // Send system information
       delay(500);
       fetchMelodies();  // Fetch melodies from firestore db
       delay(500);
       currentTimeSending();
+
+      delay(100);
+      Serial2.println("---");
     }
 
     // Reaload SYSTEM INFO, MELODIES, CURRENT TIME
     if (digitalRead(BUTTON_PIN) == HIGH) {
       buttonPressed = false;
       Serial.println("ESP button pressed!");
-      delay(10000); // Wait for STM32 erasing flash sectors
+      delay(10000);  // Wait for STM32 erasing flash sectors
 
       Serial2.println("---");
       delay(100);

@@ -278,10 +278,12 @@ bool createSystemDocument() {
 
 void fetchMelodies() {
   Serial.println("Get all files...");
-  int cnt = 1;
-  // the index starts from 3 because it is the minimum number of bells 
-  // in a bell tower to reproduce a melody
+  // int cnt = 1;
+
+  // Fetch melodies based on bells number
   for (int i = 3; i <= bellsNum; i++) {
+    // The index starts from 3 because it is the minimum number of bells
+    // in a bell tower to reproduce a melody
     String startingPath = "melodies/" + String(i) + "/";
 
     int title = 1;
@@ -304,16 +306,49 @@ void fetchMelodies() {
         File testFile = SPIFFS.open("/buf.txt", "r");
         if (testFile) {
           String fileContent = testFile.readString();  // Leggi tutto il contenuto del file
-          melodiesList.push_back(fileContent);        // Aggiungi il contenuto alla lista
+          melodiesList.push_back(fileContent);         // Aggiungi il contenuto alla lista
           testFile.close();
         } else {
           Serial.println("Failed to open the downloaded file.");
         }
         title++;
-        cnt++;
+        // cnt++;
       } else {
         printError(aClient.lastError().code(), aClient.lastError().message());
       }
+    }
+  }
+
+  // Fetch personal melodies
+  String startingPath = "melodies/" + systemId + "/";
+  int title = 1;
+  bool result = true;
+  while (result) {
+    Serial.print("db Title: ");
+    Serial.println(title);
+    String path = startingPath + String(title) + ".txt";
+    Serial.print("Downloading from path: ");
+    Serial.println(path);
+    String buff = "buf.txt";
+
+    FileConfig media_file(buff, fileCallback);
+
+    result = storage.download(aClient, FirebaseStorage::Parent(STORAGE_BUCKET_ID, path), getFile(media_file));
+
+    if (result) {
+      Serial.println("Object downloaded.");
+      File testFile = SPIFFS.open("/buf.txt", "r");
+      if (testFile) {
+        String fileContent = testFile.readString();  // Leggi tutto il contenuto del file
+        melodiesList.push_back(fileContent);         // Aggiungi il contenuto alla lista
+        testFile.close();
+      } else {
+        Serial.println("Failed to open the downloaded file.");
+      }
+      title++;
+      // cnt++;
+    } else {
+      printError(aClient.lastError().code(), aClient.lastError().message());
     }
   }
 
