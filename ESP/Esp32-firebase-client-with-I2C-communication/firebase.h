@@ -103,6 +103,6 @@ void readSystemInfo();
 
 void sendSystemInfo();
 
-void deleteOldEvents();
+void moveOldEvents(String payload);
 
 #endif

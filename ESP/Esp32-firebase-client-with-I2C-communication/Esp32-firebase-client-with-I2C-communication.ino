@@ -208,7 +208,7 @@ void loop() {
 
         Serial2.println("---");
 
-        deleteOldEvents();
+        moveOldEvents(payload);
       } else
         printError(aClient.lastError().code(), aClient.lastError().message());
     }

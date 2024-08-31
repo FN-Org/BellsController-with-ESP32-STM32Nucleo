@@ -667,56 +667,106 @@ void sendSystemInfo() {
   Serial2.println("---");
 }
 
-void deleteOldEvents() {
-  String collectionId = "systems/" + systemId + "/events";
-
-  String firstTimestamp;
-  ListDocumentsOptions listDocsOptions;
-  listDocsOptions.pageSize(1);
-  listDocsOptions.orderBy("time asc");
-
-  String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
-
+void moveOldEvents(String payload) {
+  String oldEventsDocPath = "systems/" + systemId + "/oldEvents";
+  String eventsDocPath = "systems/" + systemId + "/events";
   Serial.println(payload);
 
   jsonArr.setJsonArrayData(payload);
 
 
-  jsonArr.get(jsonData, "documents/[0]/fields/time/timestampValue");
+  for (int i = 0; i < jsonArr.size(); i++) {
+    jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/time/timestampValue");
 
-  if (jsonData.success) {
-    String timestamp = jsonData.stringValue;
-    struct tm timeinfo;
-    jsonData.clear();
-    if (!getLocalTime(&timeinfo)) {
-      Serial.println("Error when trying to get the time.");
-      return;
-    }
-
-    // Convert `struct tm` to ISO 8601 string
-    char currentTime[30];
-    strftime(currentTime, sizeof(currentTime), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
-    Serial.println("Current Time: " + String(currentTime));
-    Serial.println("Timestamp: " + timestamp);
-    int res = strcmp(currentTime, timestamp.c_str());
-    if (res > 0) {
-      jsonArr.get(jsonData, "documents/[0]/fields/id/stringValue");
-      if (jsonData.success) {
-        String id = jsonData.stringValue;
-        Serial.println("Event with id: " + id + String("Should be deleted!"));
-
-        payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId + String("/") + id, Precondition());
-
-        if (aClient.lastError().code() == 0)
-          Serial.println("Deleted with success!");
-        else
-          printError(aClient.lastError().code(), aClient.lastError().message());
-
-      } else {
-        Serial.println("Failed to get the id.");
+    if (jsonData.success) {
+      String timestamp = jsonData.stringValue;
+      struct tm timeinfo;
+      jsonData.clear();
+      if (!getLocalTime(&timeinfo)) {
+        Serial.println("Error when trying to get the time.");
+        return;
       }
-    } else Serial.println("No events to be deleted.");
-  } else {
-    Serial.println("Failed to get the timestamp.");
+
+      // Convert `struct tm` to ISO 8601 string
+      char currentTime[30];
+      strftime(currentTime, sizeof(currentTime), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
+      Serial.println("Current Time: " + String(currentTime));
+      Serial.println("Timestamp: " + timestamp);
+      int res = strcmp(currentTime, timestamp.c_str());
+      if (res > 0) {
+        Values::TimestampValue timestampV(timestamp);
+
+        Document<Values::Value> eventDoc("time", Values::Value(timestampV));
+
+        //Getting and adding the number
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/color/numberValue");
+        if (jsonData.success) {
+          int color = jsonData.intValue;
+          jsonData.clear();
+          Values::IntegerValue colorV(color);
+
+          eventDoc.add("color", Values::Value(colorV));
+
+        } else {
+          Serial.println("Failed to get the color.");
+        }
+
+        //Getting and adding the melodyname
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/melodyName/stringValue");
+        if (jsonData.success) {
+          String melodyName = jsonData.stringValue;
+          jsonData.clear();
+          Values::StringValue melodyNameV(melodyName);
+          eventDoc.add("melodyName", Values::Value(melodyNameV));
+
+        } else {
+          Serial.println("Failed to get the melodyName.");
+        }
+
+        //Getting and adding the melodyNumber
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/melodyNumber/numberValue");
+        if (jsonData.success) {
+          int melodyNumber = jsonData.intValue;
+          jsonData.clear();
+          Values::IntegerValue melodyNumberV(melodyNumber);
+          eventDoc.add("melodyNumber", Values::Value(melodyNumberV));
+
+        } else {
+          Serial.println("Failed to get the melodyNumber.");
+        }
+
+        //Getting and adding the id and creating the new document
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/id/stringValue");
+        if (jsonData.success) {
+          String id = jsonData.stringValue;
+          Serial.println("Event with id: " + id + String("Should be deleted!"));
+          jsonData.clear();
+          Values::StringValue idV(id);
+          eventDoc.add("id", Values::Value(idV));
+
+          payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), eventsDocPath + String("/") + id, Precondition());
+
+          if (aClient.lastError().code() == 0)
+            Serial.println("Deleted with success!");
+          else
+            printError(aClient.lastError().code(), aClient.lastError().message());
+
+
+
+          String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), oldEventsDocPath + String("/") + id, DocumentMask(), eventDoc);
+          if (aClient.lastError().code() == 0)
+            Serial.println("Created with success!");
+          else
+            printError(aClient.lastError().code(), aClient.lastError().message());
+
+        } else {
+          Serial.println("Failed to get the id.");
+        }
+
+
+      } else Serial.println("No events to be deleted.");
+    } else {
+      Serial.println("Failed to get the timestamp.");
+    }
   }
 }
