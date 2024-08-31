@@ -357,20 +357,20 @@ void fetchMelodies() {
   Serial.println(melodiesNum);
   Serial.print("Numero nuove melodie: ");
   Serial.println(melodiesList.size());
-  if (melodiesList.size() > melodiesNum) {
-    for (const String& melody : melodiesList) {
-      // Salva il contenuto in "buf.txt"
-      File file = SPIFFS.open("/buf.txt", "w");
-      if (file) {
-        file.print(melody);
-        file.close();
-        delay(1000);
-        readAndSendBuffer();  // Invia la melodia
-      } else {
-        Serial.println("Failed to open /buf.txt for writing.");
-      }
+  // Manda sempre le melodie
+  for (const String& melody : melodiesList) {
+    // Salva il contenuto in "buf.txt"
+    File file = SPIFFS.open("/buf.txt", "w");
+    if (file) {
+      file.print(melody);
+      file.close();
+      delay(1000);
+      readAndSendBuffer();  // Invia la melodia
+    } else {
+      Serial.println("Failed to open /buf.txt for writing.");
     }
   }
+
   updateDBMelodies();
 }
 
@@ -699,7 +699,7 @@ void moveOldEvents(String payload) {
         Document<Values::Value> eventDoc("time", Values::Value(timestampV));
 
         //Getting and adding the number
-        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/color/numberValue");
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/color");
         if (jsonData.success) {
           int color = jsonData.intValue;
           jsonData.clear();
@@ -724,7 +724,7 @@ void moveOldEvents(String payload) {
         }
 
         //Getting and adding the melodyNumber
-        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/melodyNumber/numberValue");
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/melodyNumber");
         if (jsonData.success) {
           int melodyNumber = jsonData.intValue;
           jsonData.clear();

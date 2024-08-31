@@ -176,7 +176,8 @@ int main(void)
   HD44780_Clear();
   HD44780_SetCursor(0,0);
   HD44780_PrintStr("Sync and start");
-  HAL_Delay(3000);
+  HAL_Delay(5000);
+  HD44780_Clear();
   HD44780_SetCursor(0,0);
   HD44780_PrintStr("Press button");
   HD44780_SetCursor(0,1);
