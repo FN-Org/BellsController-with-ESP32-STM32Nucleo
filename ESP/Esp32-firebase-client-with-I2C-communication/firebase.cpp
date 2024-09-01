@@ -278,6 +278,9 @@ bool createSystemDocument() {
 
 void fetchMelodies() {
   Serial.println("Get all files...");
+
+  melodiesList.clear();
+  melodiesNames.clear();
   // int cnt = 1;
 
   // Fetch melodies based on bells number
@@ -352,11 +355,6 @@ void fetchMelodies() {
     }
   }
 
-  // Controlla se ci sono più melodie nella lista rispetto a quelle esistenti
-  Serial.print("Numero melodie precedenti: ");
-  Serial.println(melodiesNum);
-  Serial.print("Numero nuove melodie: ");
-  Serial.println(melodiesList.size());
   // Manda sempre le melodie
   for (const String& melody : melodiesList) {
     // Salva il contenuto in "buf.txt"
@@ -406,6 +404,8 @@ void updateDBMelodies() {
 
   String path = starting_path;
 
+  deleteMelodies(starting_path, melodiesNames);
+
   for (int i = 0; i < melodiesNames.size(); i++) {
 
     path = starting_path + melodiesNames[i];
@@ -449,11 +449,53 @@ void updateDBMelodies() {
 
   if (aClient.lastError().code() == 0) {
     Serial.println("Update of the melodies number on the db successful");
-    melodiesList.clear();
-    melodiesNames.clear();
   } else {
     printError(aClient.lastError().code(), aClient.lastError().message());
   }
+}
+
+void deleteMelodies(String documentPath, std::vector<String> melodiesName) {
+
+  for (size_t i = 0; i < melodiesName.size(); i++) {
+    // Costruisce il percorso completo del documento da eliminare
+    String fullPath = documentPath + melodiesName[i];
+    
+    // Esegue l'eliminazione del documento
+    auto payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), fullPath, Precondition());
+
+    // Controlla se l'eliminazione è avvenuta con successo
+    if (aClient.lastError().code() == 0) {
+      Serial.println("Deleted: " + fullPath);
+    } else {
+      printError(aClient.lastError().code(), aClient.lastError().message());
+    }
+  }
+}
+
+void syncOnDB() {
+    // Definisci il percorso del documento
+    String documentPath = "systems/" + systemId;
+
+    Values::BooleanValue boolV(true);
+    
+    // Crea un oggetto Document che rappresenta il contenuto da aggiornare
+    Document<Values::Value> doc;
+    doc.add("sync", Values::Value(boolV));  // Imposta il campo "sync" su true
+
+    // Crea l'oggetto PatchDocumentOptions
+    PatchDocumentOptions patchOptions(DocumentMask("sync"), DocumentMask(), Precondition());
+
+    // Esegui l'aggiornamento del documento
+    Serial.println("Updating the sync field in the document... ");
+    String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath, patchOptions, doc);
+
+    // Verifica se l'aggiornamento è avvenuto con successo
+    if (aClient.lastError().code() == 0) {
+        Serial.println("Sync field updated successfully.");
+        Serial.println(payload);
+    } else {
+        printError(aClient.lastError().code(), aClient.lastError().message());
+    }
 }
 
 /*

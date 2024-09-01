@@ -80,6 +80,10 @@ void fileCallback(File& file, const char* filename, file_operating_mode mode);
 
 void updateDBMelodies();
 
+void deleteMelodies(String documentPath, std::vector<String> melodiesName);
+
+void syncOnDB();
+
 /*
 void saveTitleInSPIFFS(String title);
 

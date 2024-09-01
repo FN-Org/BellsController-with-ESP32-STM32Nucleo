@@ -143,6 +143,8 @@ void loop() {
 
       delay(100);
       Serial2.println("---");
+
+      syncOnDB();
     }
 
     // Reaload SYSTEM INFO, MELODIES, CURRENT TIME
@@ -163,12 +165,7 @@ void loop() {
       delay(100);
       Serial2.println("---");
 
-      /*
-      // Aspetta che il pulsante venga rilasciato prima di procedere
-      while (digitalRead(BUTTON_PIN) == LOW) {
-        delay(10);  // Evita un loop troppo veloce
-      }
-      */
+      syncOnDB();
     }
 
     // Invio EVENTS
