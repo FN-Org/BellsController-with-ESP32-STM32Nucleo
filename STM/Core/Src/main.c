@@ -1060,7 +1060,7 @@ void readAndRing(int melodyNum){
 	uint32_t ReadBuffer[MelodyLineSize/4];
 	int line = 0;
 	int note = 0;
-	double duration = 0.0;
+	int duration = 0;
 	uint32_t melodyLineAddress = melodyStartingAddress + line * MelodyLineSize;
 
 	char ReadedString[MelodyLineSize];
@@ -1096,9 +1096,12 @@ void readAndRing(int melodyNum){
 			Convert_To_Str(ReadBuffer,ReadedString);
 			if ((unsigned char)ReadedString[0] == 0xFF) break;
 			note = atoi(ReadedString);
-			duration = atof(ReadedString + 2);
+			duration = atof(ReadedString + 2) * 1000 - 500;
 			if (tooLong){
 				HD44780_ScrollDisplayLeft();
+			}
+			if (duration <= 0) {
+				duration = 1;
 			}
 			play(note,duration);
 
@@ -1111,7 +1114,7 @@ void readAndRing(int melodyNum){
 }
 
 
-void play(int note,double duration){
+void play(int note, int duration){
 	char buf[20];
 	sprintf(buf, "Playing: %d", note);
 	send_uart_message(buf);
@@ -1140,7 +1143,7 @@ void play(int note,double duration){
 
 
 	// Introduce un ritardo basato sulla durata in secondi convertita in millisecondi
-	HAL_Delay((uint32_t)(duration * 1000));
+	HAL_Delay((uint32_t)(duration));
 }
 
 void parseTime(){

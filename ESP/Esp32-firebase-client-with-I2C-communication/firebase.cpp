@@ -674,7 +674,6 @@ void moveOldEvents(String payload) {
 
   jsonArr.setJsonArrayData(payload);
 
-
   for (int i = 0; i < jsonArr.size(); i++) {
     jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/time/timestampValue");
 
@@ -698,8 +697,8 @@ void moveOldEvents(String payload) {
 
         Document<Values::Value> eventDoc("time", Values::Value(timestampV));
 
-        //Getting and adding the number
-        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/color");
+        // Getting and adding the number
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/color/integerValue");
         if (jsonData.success) {
           int color = jsonData.intValue;
           jsonData.clear();
@@ -711,7 +710,7 @@ void moveOldEvents(String payload) {
           Serial.println("Failed to get the color.");
         }
 
-        //Getting and adding the melodyname
+        // Getting and adding the melodyname
         jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/melodyName/stringValue");
         if (jsonData.success) {
           String melodyName = jsonData.stringValue;
@@ -723,8 +722,8 @@ void moveOldEvents(String payload) {
           Serial.println("Failed to get the melodyName.");
         }
 
-        //Getting and adding the melodyNumber
-        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/melodyNumber");
+        // Getting and adding the melodyNumber
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/melodyNumber/integerValue");
         if (jsonData.success) {
           int melodyNumber = jsonData.intValue;
           jsonData.clear();
@@ -735,7 +734,7 @@ void moveOldEvents(String payload) {
           Serial.println("Failed to get the melodyNumber.");
         }
 
-        //Getting and adding the id and creating the new document
+        // Getting and adding the id and creating the new document
         jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/id/stringValue");
         if (jsonData.success) {
           String id = jsonData.stringValue;
@@ -751,8 +750,6 @@ void moveOldEvents(String payload) {
           else
             printError(aClient.lastError().code(), aClient.lastError().message());
 
-
-
           String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), oldEventsDocPath + String("/") + id, DocumentMask(), eventDoc);
           if (aClient.lastError().code() == 0)
             Serial.println("Created with success!");
@@ -762,7 +759,6 @@ void moveOldEvents(String payload) {
         } else {
           Serial.println("Failed to get the id.");
         }
-
 
       } else Serial.println("No events to be deleted.");
     } else {
