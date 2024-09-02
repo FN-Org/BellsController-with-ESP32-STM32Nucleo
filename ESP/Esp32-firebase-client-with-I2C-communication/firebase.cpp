@@ -761,7 +761,9 @@ void sendSystemInfo() {
 void moveOldEvents(String payload) {
   String oldEventsDocPath = "systems/" + systemId + "/oldEvents";
   String eventsDocPath = "systems/" + systemId + "/events";
-  Serial.println(payload);
+  //Serial.println(payload); //Debug
+
+  bool problems = false;
 
   jsonArr.setJsonArrayData(payload);
 
@@ -799,6 +801,7 @@ void moveOldEvents(String payload) {
 
         } else {
           Serial.println("Failed to get the color.");
+          problems = true;
         }
 
         // Getting and adding the melodyname
@@ -811,6 +814,7 @@ void moveOldEvents(String payload) {
 
         } else {
           Serial.println("Failed to get the melodyName.");
+          problems = true;
         }
 
         // Getting and adding the melodyNumber
@@ -823,6 +827,7 @@ void moveOldEvents(String payload) {
 
         } else {
           Serial.println("Failed to get the melodyNumber.");
+          problems = true;
         }
 
         // Getting and adding the id and creating the new document
@@ -833,20 +838,23 @@ void moveOldEvents(String payload) {
           jsonData.clear();
           Values::StringValue idV(id);
           eventDoc.add("id", Values::Value(idV));
+          if (!problems) {
+            payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), eventsDocPath + String("/") + id, Precondition());
 
-          payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), eventsDocPath + String("/") + id, Precondition());
+            if (aClient.lastError().code() == 0)
+              Serial.println("Deleted with success!");
+            else
+              printError(aClient.lastError().code(), aClient.lastError().message());
 
-          if (aClient.lastError().code() == 0)
-            Serial.println("Deleted with success!");
-          else
-            printError(aClient.lastError().code(), aClient.lastError().message());
-
-          String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), oldEventsDocPath + String("/") + id, DocumentMask(), eventDoc);
-          if (aClient.lastError().code() == 0)
-            Serial.println("Created with success!");
-          else
-            printError(aClient.lastError().code(), aClient.lastError().message());
-
+            String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), oldEventsDocPath + String("/") + id, DocumentMask(), eventDoc);
+            if (aClient.lastError().code() == 0)
+              Serial.println("Created with success!");
+            else
+              printError(aClient.lastError().code(), aClient.lastError().message());
+          } else {
+            Serial.println("Problems fetching document fields");
+            continue;
+          }
         } else {
           Serial.println("Failed to get the id.");
         }
