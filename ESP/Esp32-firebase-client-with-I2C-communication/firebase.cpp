@@ -25,6 +25,7 @@ String userUid = "";
 bool verified = false;
 
 std::vector<String> melodiesNames;
+std::vector<String> melodiesList;  // list to memorize all the melodies
 
 /*
 * @brief Function to handle the set up of the connection to the firestore cloud database service
@@ -277,37 +278,97 @@ bool createSystemDocument() {
 
 void fetchMelodies() {
   Serial.println("Get all files...");
-  int cnt = 1;
+
+  melodiesList.clear();
+  melodiesNames.clear();
+  // int cnt = 1;
+
+  // Fetch melodies based on bells number
   for (int i = 3; i <= bellsNum; i++) {
+    // The index starts from 3 because it is the minimum number of bells
+    // in a bell tower to reproduce a melody
     String startingPath = "melodies/" + String(i) + "/";
 
     int title = 1;
     bool result = true;
 
-    String path = startingPath + String(title) + ".txt";
-
-    String buff = "buf.txt";
-
-    FileConfig media_file(buff, fileCallback);
-
     while (result) {
       Serial.print("db Title: ");
       Serial.println(title);
-      path = startingPath + String(title) + ".txt";
+      String path = startingPath + String(title) + ".txt";
+      Serial.print("Downloading from path: ");
+      Serial.println(path);
+      String buff = "buf.txt";
+
+      FileConfig media_file(buff, fileCallback);
+
       result = storage.download(aClient, FirebaseStorage::Parent(STORAGE_BUCKET_ID, path), getFile(media_file));
 
       if (result) {
         Serial.println("Object downloaded.");
-        if (cnt > melodiesNum) {
-          readAndSendBuffer();
+        File testFile = SPIFFS.open("/buf.txt", "r");
+        if (testFile) {
+          String fileContent = testFile.readString();  // Leggi tutto il contenuto del file
+          melodiesList.push_back(fileContent);         // Aggiungi il contenuto alla lista
+          testFile.close();
+        } else {
+          Serial.println("Failed to open the downloaded file.");
         }
         title++;
-        cnt++;
-
-      } else
+        // cnt++;
+      } else {
         printError(aClient.lastError().code(), aClient.lastError().message());
+      }
     }
   }
+
+  // Fetch personal melodies
+  String startingPath = "melodies/" + systemId + "/";
+  int title = 1;
+  bool result = true;
+  while (result) {
+    Serial.print("db Title: ");
+    Serial.println(title);
+    String path = startingPath + String(title) + ".txt";
+    Serial.print("Downloading from path: ");
+    Serial.println(path);
+    String buff = "buf.txt";
+
+    FileConfig media_file(buff, fileCallback);
+
+    result = storage.download(aClient, FirebaseStorage::Parent(STORAGE_BUCKET_ID, path), getFile(media_file));
+
+    if (result) {
+      Serial.println("Object downloaded.");
+      File testFile = SPIFFS.open("/buf.txt", "r");
+      if (testFile) {
+        String fileContent = testFile.readString();  // Leggi tutto il contenuto del file
+        melodiesList.push_back(fileContent);         // Aggiungi il contenuto alla lista
+        testFile.close();
+      } else {
+        Serial.println("Failed to open the downloaded file.");
+      }
+      title++;
+      // cnt++;
+    } else {
+      printError(aClient.lastError().code(), aClient.lastError().message());
+    }
+  }
+
+  // Manda sempre le melodie
+  for (const String& melody : melodiesList) {
+    // Salva il contenuto in "buf.txt"
+    File file = SPIFFS.open("/buf.txt", "w");
+    if (file) {
+      file.print(melody);
+      file.close();
+      delay(1000);
+      readAndSendBuffer();  // Invia la melodia
+    } else {
+      Serial.println("Failed to open /buf.txt for writing.");
+    }
+  }
+
   updateDBMelodies();
 }
 
@@ -343,6 +404,8 @@ void updateDBMelodies() {
 
   String path = starting_path;
 
+  deleteMelodies(starting_path, melodiesNames);
+
   for (int i = 0; i < melodiesNames.size(); i++) {
 
     path = starting_path + melodiesNames[i];
@@ -374,7 +437,7 @@ void updateDBMelodies() {
   file.println(systemId);
   file.close();
 
-  // Update the firestore db
+  // Update the firestore db for the number of melodies
   path = "systems/" + systemId;
   Values::IntegerValue nMelodies(melodiesNum);
   Document<Values::Value> update("nMelodies", Values::Value(nMelodies));
@@ -391,6 +454,51 @@ void updateDBMelodies() {
   }
 }
 
+void deleteMelodies(String documentPath, std::vector<String> melodiesName) {
+
+  for (size_t i = 0; i < melodiesName.size(); i++) {
+    // Costruisce il percorso completo del documento da eliminare
+    String fullPath = documentPath + melodiesName[i];
+    
+    // Esegue l'eliminazione del documento
+    auto payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), fullPath, Precondition());
+
+    // Controlla se l'eliminazione è avvenuta con successo
+    if (aClient.lastError().code() == 0) {
+      Serial.println("Deleted: " + fullPath);
+    } else {
+      printError(aClient.lastError().code(), aClient.lastError().message());
+    }
+  }
+}
+
+void syncOnDB() {
+    // Definisci il percorso del documento
+    String documentPath = "systems/" + systemId;
+
+    Values::BooleanValue boolV(true);
+    
+    // Crea un oggetto Document che rappresenta il contenuto da aggiornare
+    Document<Values::Value> doc;
+    doc.add("sync", Values::Value(boolV));  // Imposta il campo "sync" su true
+
+    // Crea l'oggetto PatchDocumentOptions
+    PatchDocumentOptions patchOptions(DocumentMask("sync"), DocumentMask(), Precondition());
+
+    // Esegui l'aggiornamento del documento
+    Serial.println("Updating the sync field in the document... ");
+    String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath, patchOptions, doc);
+
+    // Verifica se l'aggiornamento è avvenuto con successo
+    if (aClient.lastError().code() == 0) {
+        Serial.println("Sync field updated successfully.");
+        Serial.println(payload);
+    } else {
+        printError(aClient.lastError().code(), aClient.lastError().message());
+    }
+}
+
+/*
 void saveTitleInSPIFFS(String title) {
   File file = SPIFFS.open("/melody_titles.txt", "a");
   if (!file) {
@@ -413,6 +521,7 @@ void readMelodyTitles() {
   }
   testFile.close();
 }
+*/
 
 void readAndSendBuffer() {
   File testFile = SPIFFS.open("/buf.txt", "r");
@@ -430,7 +539,7 @@ void readAndSendBuffer() {
   Serial2.println(melodyTitle);
   Serial.println(melodyTitle);
   melodiesNames.push_back(melodyTitle);
-  saveTitleInSPIFFS(melodyTitle);
+  // saveTitleInSPIFFS(melodyTitle);
   delay(100);
   String line;
   while (testFile.available()) {
@@ -600,57 +709,102 @@ void sendSystemInfo() {
   Serial2.println("---");
 }
 
-
-void deleteOldEvents() {
-  String collectionId = "systems/" + systemId + "/events";
-
-  String firstTimestamp;
-  ListDocumentsOptions listDocsOptions;
-  listDocsOptions.pageSize(1);
-  listDocsOptions.orderBy("time asc");
-
-  String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
-
+void moveOldEvents(String payload) {
+  String oldEventsDocPath = "systems/" + systemId + "/oldEvents";
+  String eventsDocPath = "systems/" + systemId + "/events";
   Serial.println(payload);
 
   jsonArr.setJsonArrayData(payload);
 
+  for (int i = 0; i < jsonArr.size(); i++) {
+    jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/time/timestampValue");
 
-  jsonArr.get(jsonData, "documents/[0]/fields/time/timestampValue");
-
-  if (jsonData.success) {
-    String timestamp = jsonData.stringValue;
-    struct tm timeinfo;
-    jsonData.clear();
-    if (!getLocalTime(&timeinfo)) {
-      Serial.println("Error when trying to get the time.");
-      return;
-    }
-
-    // Convert `struct tm` to ISO 8601 string
-    char currentTime[30];
-    strftime(currentTime, sizeof(currentTime), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
-    Serial.println("Current Time: " + String(currentTime));
-    Serial.println("Timestamp: " + timestamp);
-    int res = strcmp(currentTime, timestamp.c_str());
-    if (res > 0) {
-      jsonArr.get(jsonData, "documents/[0]/fields/id/stringValue");
-      if (jsonData.success) {
-        String id = jsonData.stringValue;
-        Serial.println("Event with id: " + id + String("Should be deleted!"));
-
-        payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId + String("/") + id, Precondition());
-
-        if (aClient.lastError().code() == 0)
-          Serial.println("Deleted with success!");
-        else
-          printError(aClient.lastError().code(), aClient.lastError().message());
-
-      } else {
-        Serial.println("Failed to get the id.");
+    if (jsonData.success) {
+      String timestamp = jsonData.stringValue;
+      struct tm timeinfo;
+      jsonData.clear();
+      if (!getLocalTime(&timeinfo)) {
+        Serial.println("Error when trying to get the time.");
+        return;
       }
-    } else Serial.println("No events to be deleted.");
-  } else {
-    Serial.println("Failed to get the timestamp.");
+
+      // Convert `struct tm` to ISO 8601 string
+      char currentTime[30];
+      strftime(currentTime, sizeof(currentTime), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
+      Serial.println("Current Time: " + String(currentTime));
+      Serial.println("Timestamp: " + timestamp);
+      int res = strcmp(currentTime, timestamp.c_str());
+      if (res > 0) {
+        Values::TimestampValue timestampV(timestamp);
+
+        Document<Values::Value> eventDoc("time", Values::Value(timestampV));
+
+        // Getting and adding the number
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/color/integerValue");
+        if (jsonData.success) {
+          int color = jsonData.intValue;
+          jsonData.clear();
+          Values::IntegerValue colorV(color);
+
+          eventDoc.add("color", Values::Value(colorV));
+
+        } else {
+          Serial.println("Failed to get the color.");
+        }
+
+        // Getting and adding the melodyname
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/melodyName/stringValue");
+        if (jsonData.success) {
+          String melodyName = jsonData.stringValue;
+          jsonData.clear();
+          Values::StringValue melodyNameV(melodyName);
+          eventDoc.add("melodyName", Values::Value(melodyNameV));
+
+        } else {
+          Serial.println("Failed to get the melodyName.");
+        }
+
+        // Getting and adding the melodyNumber
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/melodyNumber/integerValue");
+        if (jsonData.success) {
+          int melodyNumber = jsonData.intValue;
+          jsonData.clear();
+          Values::IntegerValue melodyNumberV(melodyNumber);
+          eventDoc.add("melodyNumber", Values::Value(melodyNumberV));
+
+        } else {
+          Serial.println("Failed to get the melodyNumber.");
+        }
+
+        // Getting and adding the id and creating the new document
+        jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/id/stringValue");
+        if (jsonData.success) {
+          String id = jsonData.stringValue;
+          Serial.println("Event with id: " + id + String("Should be deleted!"));
+          jsonData.clear();
+          Values::StringValue idV(id);
+          eventDoc.add("id", Values::Value(idV));
+
+          payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), eventsDocPath + String("/") + id, Precondition());
+
+          if (aClient.lastError().code() == 0)
+            Serial.println("Deleted with success!");
+          else
+            printError(aClient.lastError().code(), aClient.lastError().message());
+
+          String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), oldEventsDocPath + String("/") + id, DocumentMask(), eventDoc);
+          if (aClient.lastError().code() == 0)
+            Serial.println("Created with success!");
+          else
+            printError(aClient.lastError().code(), aClient.lastError().message());
+
+        } else {
+          Serial.println("Failed to get the id.");
+        }
+
+      } else Serial.println("No events to be deleted.");
+    } else {
+      Serial.println("Failed to get the timestamp.");
+    }
   }
 }

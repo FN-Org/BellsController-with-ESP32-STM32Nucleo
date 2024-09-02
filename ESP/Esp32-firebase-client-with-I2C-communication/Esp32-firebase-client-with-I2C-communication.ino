@@ -18,6 +18,8 @@
 //########################################################################################
 // Global Variables//
 #define SENDING_INTERVAL 120000
+#define BUTTON_PIN 13
+
 // Other global variables
 bool first_time = true;
 bool setupCompleted = false;
@@ -30,6 +32,18 @@ const int daylightOffset_sec = 3600;  // Ora legale
 
 unsigned long dataMillis = 0;
 unsigned long last_time_sent = 0;
+
+volatile unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50;
+volatile bool buttonPressed = false;
+
+void onButtonPress() {
+  unsigned long currentTime = millis();
+  if (currentTime - lastDebounceTime > debounceDelay) {
+    lastDebounceTime = currentTime;
+    buttonPressed = true;
+  }
+}
 
 
 //#########################################################################################################
@@ -57,6 +71,9 @@ void setup() {
       setupCompleted = true;
       setupNTP();   // Network Time Protocol
       setupUART();  // Universal Asynchronous Receiver-Transmitter (seriale)
+
+      // Configura il pin del bottone come input con resistenza di pull-up
+      pinMode(BUTTON_PIN, INPUT_PULLUP);
     }
   } else {
     ReceiveandSaveProjectInformations();
@@ -90,7 +107,7 @@ void loop() {
       Serial.println("User UID in the loop: " + userUid);
 
       readSystemInfo();  // It reads the system information from the file in the SPIFFS (system_info.txt)
-      readMelodyTitles(); // It reads the melody titles from the file in the SPIFFS (melody_titles.txt)
+      // readMelodyTitles();  // It reads the melody titles from the file in the SPIFFS (melody_titles.txt)
 
       // Usiamo systemId nella create document, che la prendiamo dal file. se è vuota ok e se invece non è vuota dovrebbe darci errore.
 
@@ -107,11 +124,51 @@ void loop() {
         Serial.println("Document already existed or error occurred.");
       }
 
-      fetchMelodies(); // Fetch melodies from firestore db
+      Serial.println("Waiting for the button to be pressed");
+      // Waiting for a sync button press
+      while (digitalRead(BUTTON_PIN) == LOW) {
+        delay(10);  // Avoid a loop too fast
+      }
+      Serial.println("Sync button pressed");
+      delay(10000);
+
+      Serial2.println("---");
       delay(100);
+
+      sendSystemInfo();  // Send system information
+      delay(500);
+      fetchMelodies();  // Fetch melodies from firestore db
+      delay(500);
       currentTimeSending();
+
+      delay(100);
+      Serial2.println("---");
+
+      syncOnDB();
     }
 
+    // Reaload SYSTEM INFO, MELODIES, CURRENT TIME
+    if (digitalRead(BUTTON_PIN) == HIGH) {
+      buttonPressed = false;
+      Serial.println("ESP button pressed!");
+      delay(10000);  // Wait for STM32 erasing flash sectors
+
+      Serial2.println("---");
+      delay(100);
+
+      sendSystemInfo();
+      delay(500);
+      fetchMelodies();
+      delay(500);
+      currentTimeSending();
+
+      delay(100);
+      Serial2.println("---");
+
+      syncOnDB();
+    }
+
+    // Invio EVENTS
     if (app.ready() && (millis() - dataMillis > SENDING_INTERVAL || dataMillis == 0)) {
       dataMillis = millis();
 
@@ -133,8 +190,6 @@ void loop() {
 
       String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, listDocsOptions);
 
-
-
       if (aClient.lastError().code() == 0) {
         Serial.println("sending events...");
 
@@ -145,20 +200,22 @@ void loop() {
         Serial2.println("---");
         delay(100);
         Serial2.println("-E-");
-        
+
         sendPackets(256, payloadCleaned);
 
         Serial2.println("---");
 
-        deleteOldEvents();
+        moveOldEvents(payload);
       } else
         printError(aClient.lastError().code(), aClient.lastError().message());
     }
 
-    if (millis() - last_time_sent> SENDING_INTERVAL*10) {
+    // Invio CURRENT TIME
+    if (millis() - last_time_sent > SENDING_INTERVAL * 10) {
       currentTimeSending();
       last_time_sent = millis();
     }
+
   } else server.handleClient();
 }
 //#############################################################################################################################################

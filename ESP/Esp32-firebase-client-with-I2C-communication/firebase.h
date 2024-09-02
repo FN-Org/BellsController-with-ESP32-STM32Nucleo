@@ -80,9 +80,15 @@ void fileCallback(File& file, const char* filename, file_operating_mode mode);
 
 void updateDBMelodies();
 
+void deleteMelodies(String documentPath, std::vector<String> melodiesName);
+
+void syncOnDB();
+
+/*
 void saveTitleInSPIFFS(String title);
 
 void readMelodyTitles();
+*/
 
 void readAndSendBuffer();
 
@@ -101,6 +107,6 @@ void readSystemInfo();
 
 void sendSystemInfo();
 
-void deleteOldEvents();
+void moveOldEvents(String payload);
 
 #endif
