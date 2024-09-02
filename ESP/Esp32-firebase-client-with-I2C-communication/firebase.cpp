@@ -4,6 +4,9 @@
 String API_KEY = "";
 String FIREBASE_PROJECT_ID = "";
 
+String CLIENT_EMAIL = "";
+String PRIVATE_KEY = "";
+
 //Global variables for connecting to the cloud storage (stored in /project_info.txt)
 String STORAGE_BUCKET_ID = "";
 
@@ -13,8 +16,11 @@ DefaultNetwork network;  // initilize with boolean parameter to enable/disable n
 AsyncClient aClient(ssl_client, getNetwork(network));
 Firestore::Documents Docs;
 Storage storage;
+Messaging messaging;
+
 AsyncResult aResult_no_callback;
 FirebaseApp app;
+FirebaseApp appService;
 
 FirebaseJson jsonParser;
 FirebaseJsonData jsonData;
@@ -34,6 +40,7 @@ std::vector<String> melodiesList;  // list to memorize all the melodies
 bool setupFirebase() {
   Firebase.printf("Firebase Client v%s\n", FIREBASE_CLIENT_VERSION);
   UserAuth user_auth(API_KEY, email, account_password);
+  ServiceAuth sa_auth(timeStatusCB, CLIENT_EMAIL, FIREBASE_PROJECT_ID, PRIVATE_KEY, 3000 /* expire period in seconds (<= 3600) */);
   Serial.println("Initializing app...");
 
   Serial.println("Sono qui 1");
@@ -46,11 +53,13 @@ bool setupFirebase() {
   // Binding the FirebaseApp for authentication handler.
   // To unbind, use Docs.resetApp();
   initializeApp(aClient, app, getAuth(user_auth), aResult_no_callback);
+  initializeApp(aClient, appService, getAuth(sa_auth), aResult_no_callback);
 
   Serial.println("Sono qui 3");
 
   app.getApp<Firestore::Documents>(Docs);
   app.getApp<Storage>(storage);
+  appService.getApp<Messaging>(messaging);
 
   Serial.println("Sono qui 4");
 
@@ -127,12 +136,14 @@ bool verifyUser(const String& apiKey, const String& email, const String& passwor
 void authHandler() {
   // Blocking authentication handler with timeout
   unsigned long ms = millis();
-  while (app.isInitialized() && !app.ready() && millis() - ms < 120 * 1000) {
+  while (app.isInitialized() && !app.ready() && millis() - ms < 120 * 1000 && appService.isInitialized() && !appService.ready()) {
     // The JWT token processor required for ServiceAuth and CustomAuth authentications.
     // JWT is a static object of JWTClass and it's not thread safe.
     // In multi-threaded operations (multi-FirebaseApp), you have to define JWTClass for each FirebaseApp,
     // and set it to the FirebaseApp via FirebaseApp::setJWTProcessor(<JWTClass>), before calling initializeApp.
     JWT.loop(app.getAuth());
+    printResult(aResult_no_callback);
+    JWT.loop(appService.getAuth());
     printResult(aResult_no_callback);
   }
 }
@@ -459,7 +470,7 @@ void deleteMelodies(String documentPath, std::vector<String> melodiesName) {
   for (size_t i = 0; i < melodiesName.size(); i++) {
     // Costruisce il percorso completo del documento da eliminare
     String fullPath = documentPath + melodiesName[i];
-    
+
     // Esegue l'eliminazione del documento
     auto payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), fullPath, Precondition());
 
@@ -473,29 +484,29 @@ void deleteMelodies(String documentPath, std::vector<String> melodiesName) {
 }
 
 void syncOnDB() {
-    // Definisci il percorso del documento
-    String documentPath = "systems/" + systemId;
+  // Definisci il percorso del documento
+  String documentPath = "systems/" + systemId;
 
-    Values::BooleanValue boolV(true);
-    
-    // Crea un oggetto Document che rappresenta il contenuto da aggiornare
-    Document<Values::Value> doc;
-    doc.add("sync", Values::Value(boolV));  // Imposta il campo "sync" su true
+  Values::BooleanValue boolV(true);
 
-    // Crea l'oggetto PatchDocumentOptions
-    PatchDocumentOptions patchOptions(DocumentMask("sync"), DocumentMask(), Precondition());
+  // Crea un oggetto Document che rappresenta il contenuto da aggiornare
+  Document<Values::Value> doc;
+  doc.add("sync", Values::Value(boolV));  // Imposta il campo "sync" su true
 
-    // Esegui l'aggiornamento del documento
-    Serial.println("Updating the sync field in the document... ");
-    String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath, patchOptions, doc);
+  // Crea l'oggetto PatchDocumentOptions
+  PatchDocumentOptions patchOptions(DocumentMask("sync"), DocumentMask(), Precondition());
 
-    // Verifica se l'aggiornamento è avvenuto con successo
-    if (aClient.lastError().code() == 0) {
-        Serial.println("Sync field updated successfully.");
-        Serial.println(payload);
-    } else {
-        printError(aClient.lastError().code(), aClient.lastError().message());
-    }
+  // Esegui l'aggiornamento del documento
+  Serial.println("Updating the sync field in the document... ");
+  String payload = Docs.patch(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), documentPath, patchOptions, doc);
+
+  // Verifica se l'aggiornamento è avvenuto con successo
+  if (aClient.lastError().code() == 0) {
+    Serial.println("Sync field updated successfully.");
+    Serial.println(payload);
+  } else {
+    printError(aClient.lastError().code(), aClient.lastError().message());
+  }
 }
 
 /*
@@ -561,30 +572,50 @@ void ReceiveandSaveProjectInformations() {
   while (API_KEY == "") {
     if (Serial.available()) {
       API_KEY = Serial.readStringUntil('\n');
-      ssid.trim();
+      API_KEY.trim();
     }
   }
-  Serial.print("API_KEY = " + API_KEY + "\n");
+  Serial.println("API_KEY = " + API_KEY);
 
   // Read the Firebase PROJECT ID from serial
   Serial.print("Enter FIREBASE_PROJECT_ID: ");
   while (FIREBASE_PROJECT_ID == "") {
     if (Serial.available()) {
       FIREBASE_PROJECT_ID = Serial.readStringUntil('\n');
-      ssid.trim();
+      FIREBASE_PROJECT_ID.trim();
     }
   }
-  Serial.print("FIREBASE_PROJECT_ID= " + FIREBASE_PROJECT_ID);
+  Serial.println("FIREBASE_PROJECT_ID= " + FIREBASE_PROJECT_ID);
 
   // Read the Firebase BUCKET ID from serial
   Serial.print("Enter STORAGE_BUCKET_ID: ");
   while (STORAGE_BUCKET_ID == "") {
     if (Serial.available()) {
       STORAGE_BUCKET_ID = Serial.readStringUntil('\n');
-      ssid.trim();
+      STORAGE_BUCKET_ID.trim();
     }
   }
-  Serial.print("STORAGE_BUCKET_ID= " + STORAGE_BUCKET_ID);
+  Serial.println("STORAGE_BUCKET_ID= " + STORAGE_BUCKET_ID);
+
+  // Read the Firebase CLIENT_EMAIL from serial
+  Serial.print("Enter CLIENT_EMAIL: ");
+  while (CLIENT_EMAIL == "") {
+    if (Serial.available()) {
+      CLIENT_EMAIL = Serial.readStringUntil('\n');
+      CLIENT_EMAIL.trim();
+    }
+  }
+  Serial.println("CLIENT_EMAIL= " + CLIENT_EMAIL);
+
+  // Read the Firebase CLIENT_EMAIL from serial
+  Serial.print("Enter PRIVATE_KEY: ");
+  while (PRIVATE_KEY == "") {
+    if (Serial.available()) {
+      PRIVATE_KEY = Serial.readStringUntil('\n');
+      PRIVATE_KEY.trim();
+    }
+  }
+  Serial.println("PRIVATE_KEY= " + PRIVATE_KEY);
 
   // Save the information read in the SPIFFS
   File file = SPIFFS.open("/project_info.txt", "w");
@@ -595,6 +626,8 @@ void ReceiveandSaveProjectInformations() {
   file.println(API_KEY);
   file.println(FIREBASE_PROJECT_ID);
   file.println(STORAGE_BUCKET_ID);
+  file.println(CLIENT_EMAIL);
+  file.println(PRIVATE_KEY);
   file.close();
 
   // Reboot the ESP
@@ -638,6 +671,22 @@ bool readProjectInformations() {
       return false;
     }
     Serial.println("STORAGE_BUCKET_ID read = " + STORAGE_BUCKET_ID);
+
+    CLIENT_EMAIL = file.readStringUntil('\n');
+    API_KEY.trim();
+    if (CLIENT_EMAIL == "") {
+      Serial.println("CLIENT_EMAIL is empty!");
+      return false;
+    }
+    Serial.println("CLIENT_EMAIL read = " + CLIENT_EMAIL);
+
+    PRIVATE_KEY = file.readStringUntil('\n');
+    API_KEY.trim();
+    if (PRIVATE_KEY == "") {
+      Serial.println("PRIVATE_KEY is empty!");
+      return false;
+    }
+    Serial.println("PRIVATE_KEY read = " + PRIVATE_KEY);
 
     return true;
   } else {
@@ -712,7 +761,9 @@ void sendSystemInfo() {
 void moveOldEvents(String payload) {
   String oldEventsDocPath = "systems/" + systemId + "/oldEvents";
   String eventsDocPath = "systems/" + systemId + "/events";
-  Serial.println(payload);
+  //Serial.println(payload); //Debug
+
+  bool problems = false;
 
   jsonArr.setJsonArrayData(payload);
 
@@ -750,6 +801,7 @@ void moveOldEvents(String payload) {
 
         } else {
           Serial.println("Failed to get the color.");
+          problems = true;
         }
 
         // Getting and adding the melodyname
@@ -762,6 +814,7 @@ void moveOldEvents(String payload) {
 
         } else {
           Serial.println("Failed to get the melodyName.");
+          problems = true;
         }
 
         // Getting and adding the melodyNumber
@@ -774,6 +827,7 @@ void moveOldEvents(String payload) {
 
         } else {
           Serial.println("Failed to get the melodyNumber.");
+          problems = true;
         }
 
         // Getting and adding the id and creating the new document
@@ -784,20 +838,23 @@ void moveOldEvents(String payload) {
           jsonData.clear();
           Values::StringValue idV(id);
           eventDoc.add("id", Values::Value(idV));
+          if (!problems) {
+            payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), eventsDocPath + String("/") + id, Precondition());
 
-          payload = Docs.deleteDoc(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), eventsDocPath + String("/") + id, Precondition());
+            if (aClient.lastError().code() == 0)
+              Serial.println("Deleted with success!");
+            else
+              printError(aClient.lastError().code(), aClient.lastError().message());
 
-          if (aClient.lastError().code() == 0)
-            Serial.println("Deleted with success!");
-          else
-            printError(aClient.lastError().code(), aClient.lastError().message());
-
-          String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), oldEventsDocPath + String("/") + id, DocumentMask(), eventDoc);
-          if (aClient.lastError().code() == 0)
-            Serial.println("Created with success!");
-          else
-            printError(aClient.lastError().code(), aClient.lastError().message());
-
+            String payload = Docs.createDocument(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), oldEventsDocPath + String("/") + id, DocumentMask(), eventDoc);
+            if (aClient.lastError().code() == 0)
+              Serial.println("Created with success!");
+            else
+              printError(aClient.lastError().code(), aClient.lastError().message());
+          } else {
+            Serial.println("Problems fetching document fields");
+            continue;
+          }
         } else {
           Serial.println("Failed to get the id.");
         }
@@ -807,4 +864,78 @@ void moveOldEvents(String payload) {
       Serial.println("Failed to get the timestamp.");
     }
   }
+  jsonArr.clear();
+}
+
+void timeStatusCB(uint32_t& ts) {
+  if (time(nullptr) < FIREBASE_DEFAULT_TS) {
+
+    configTime(3 * 3600, 0, "pool.ntp.org");
+    while (time(nullptr) < FIREBASE_DEFAULT_TS) {
+      delay(100);
+    }
+  }
+  ts = time(nullptr);
+}
+
+void notifyFCM(String melodyName, std::vector<String> TokensFCM) {
+  Messages::Message msg;
+  Messages::Notification notification;
+  Messages::AndroidConfig androidConfig;
+  Messages::AndroidNotification androidNotification;
+
+  for (int i = 0; i < TokensFCM.size(); i++) {
+    msg.topic("event notification");
+    msg.token(TokensFCM[i]);  // Registration token to send a message to
+
+    // Basic notification
+    notification.body("Event with melody: " + melodyName + "is now playing").title("Event executing");
+
+    // Priority of a message to send to Android devices.
+    // https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages#androidmessagepriority
+    androidConfig.priority(Messages::AndroidMessagePriority::_HIGH);
+
+    // Set the relative priority for this notification.
+    // Priority is an indication of how much of the user's attention should be consumed by this notification.
+    // Low-priority notifications may be hidden from the user in certain situations,
+    // while the user might be interrupted for a higher-priority notification.
+    // https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages#NotificationPriority
+    androidNotification.notification_priority(Messages::NotificationPriority::PRIORITY_HIGH);
+
+    androidConfig.notification(androidNotification);
+
+    msg.android(androidConfig);
+
+    msg.notification(notification);
+
+    String payload = messaging.send(aClient, Messages::Parent(FIREBASE_PROJECT_ID), msg);
+
+    if (aClient.lastError().code() == 0) {
+      Serial.println("Message delivered to " + TokensFCM[i]);
+    } else
+      printError(aClient.lastError().code(), aClient.lastError().message());
+  }
+}
+
+std::vector<String> getSystemTokensFCM() {
+  String collectionId = "systems/" + systemId + "/tokensFCM";
+  String payload = Docs.list(aClient, Firestore::Parent(FIREBASE_PROJECT_ID), collectionId, ListDocumentsOptions());
+
+  std::vector<String> Tokens;
+
+  if (aClient.lastError().code() == 0) {
+    jsonArr.setJsonArrayData(payload);
+    for (int i = 0; i < jsonArr.size(); i++) {
+      jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/token/stringValue");
+
+      if (jsonData.success) {
+        Tokens.push_back(jsonData.stringValue);
+      } else Serial.println("Error when obtaining token");
+    }
+
+
+  } else
+    printError(aClient.lastError().code(), aClient.lastError().message());
+
+  return Tokens;
 }

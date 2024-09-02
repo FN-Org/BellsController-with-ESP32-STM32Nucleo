@@ -94,9 +94,11 @@ void loop() {
 
     authHandler();
 
+    appService.loop();
     app.loop();
     Docs.loop();
     storage.loop();
+    messaging.loop();
 
     if (first_time && app.ready() && app.isInitialized()) {
       Serial.println("User verified:");
@@ -208,6 +210,39 @@ void loop() {
         moveOldEvents(payload);
       } else
         printError(aClient.lastError().code(), aClient.lastError().message());
+    }
+
+    if (appService.ready() && app.ready() && Serial2.available()) {
+      String Rx = Serial2.readStringUntil('%');
+      String Tag = "";
+      String Content = "";
+      // Trova l'indice della prima occorrenza di '-'
+      int startIdx = Rx.indexOf('-');
+
+      // Trova l'indice della seconda occorrenza di '-'
+      int endIdx = Rx.indexOf('-', startIdx + 1);
+
+      if (startIdx != -1 && endIdx != -1) {
+        // Prendi la prima parte della stringa (es. "-N-")
+        Tag = Rx.substring(startIdx, endIdx + 2);
+      }
+
+      // Trova l'inizio della seconda parte della stringa dopo la prima parte
+      int secondPartStartIdx = endIdx + 2;
+
+      // Trova l'indice della stringa che segna la fine della seconda parte ("---")
+      int secondPartEndIdx = Rx.indexOf("---");
+
+      if (secondPartEndIdx != -1 && secondPartStartIdx < secondPartEndIdx) {
+        // Prendi la parte del testo tra "-N-" e "---"
+        Content = Rx.substring(secondPartStartIdx, secondPartEndIdx);
+      }
+
+      if (Tag == "-N-") {
+        std::vector<String> Tokens = getSystemTokensFCM();
+
+        if (Tokens.size()!= 0) notifyFCM(Content,Tokens);
+      }
     }
 
     // Invio CURRENT TIME

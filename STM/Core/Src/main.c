@@ -1089,6 +1089,9 @@ void readAndRing(int melodyNum){
 		HD44780_SetCursor(0,1);
 		HD44780_PrintStr(ReadedString);
 
+		sprintf((char *)buf,"-N-\n%s\n---\n",ReadedString);
+		HAL_UART_Transmit(&huart1, (uint8_t *)buf, strlen(buf), HAL_MAX_DELAY);
+
 		line++;
 		while(true){
 			melodyLineAddress = melodyStartingAddress + line * MelodyLineSize;

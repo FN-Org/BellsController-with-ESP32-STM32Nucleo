@@ -27,8 +27,11 @@ using AsyncClient = AsyncClientClass;
 extern AsyncClient aClient;
 extern Firestore::Documents Docs;
 extern Storage storage;
+extern Messaging messaging;
+
 extern AsyncResult aResult_no_callback;
 extern FirebaseApp app;
+extern FirebaseApp appService;
 
 extern FirebaseJson jsonParser;
 extern FirebaseJsonData jsonData;
@@ -108,5 +111,12 @@ void readSystemInfo();
 void sendSystemInfo();
 
 void moveOldEvents(String payload);
+
+void timeStatusCB(uint32_t& ts);
+
+void notifyFCM(String melodyName,std::vector<String> TokensFCM);
+
+std::vector<String> getSystemTokensFCM();
+
 
 #endif
