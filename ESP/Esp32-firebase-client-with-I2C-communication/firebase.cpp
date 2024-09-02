@@ -26,6 +26,9 @@ FirebaseJson jsonParser;
 FirebaseJsonData jsonData;
 FirebaseJsonArray jsonArr;
 
+JWTClass jwtProcessorUser;
+JWTClass jwtProcessorService;
+
 String userUid = "";
 
 bool verified = false;
@@ -48,6 +51,9 @@ bool setupFirebase() {
   ssl_client.setInsecure();
 
   Serial.println("Sono qui 2");
+
+  app.setJWTProcessor(jwtProcessorUser);
+  appService.setJWTProcessor(jwtProcessorService);
 
   authHandler();
   // Binding the FirebaseApp for authentication handler.
@@ -141,9 +147,9 @@ void authHandler() {
     // JWT is a static object of JWTClass and it's not thread safe.
     // In multi-threaded operations (multi-FirebaseApp), you have to define JWTClass for each FirebaseApp,
     // and set it to the FirebaseApp via FirebaseApp::setJWTProcessor(<JWTClass>), before calling initializeApp.
-    JWT.loop(app.getAuth());
+    jwtProcessorUser.loop(app.getAuth());
     printResult(aResult_no_callback);
-    JWT.loop(appService.getAuth());
+    jwtProcessorService.loop(appService.getAuth());
     printResult(aResult_no_callback);
   }
 }
@@ -673,7 +679,7 @@ bool readProjectInformations() {
     Serial.println("STORAGE_BUCKET_ID read = " + STORAGE_BUCKET_ID);
 
     CLIENT_EMAIL = file.readStringUntil('\n');
-    API_KEY.trim();
+    CLIENT_EMAIL.trim();
     if (CLIENT_EMAIL == "") {
       Serial.println("CLIENT_EMAIL is empty!");
       return false;
@@ -681,7 +687,7 @@ bool readProjectInformations() {
     Serial.println("CLIENT_EMAIL read = " + CLIENT_EMAIL);
 
     PRIVATE_KEY = file.readStringUntil('\n');
-    API_KEY.trim();
+    PRIVATE_KEY.trim();
     if (PRIVATE_KEY == "") {
       Serial.println("PRIVATE_KEY is empty!");
       return false;
@@ -902,7 +908,7 @@ void notifyFCM(String melodyName, std::vector<String> TokensFCM) {
     // https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages#NotificationPriority
     androidNotification.notification_priority(Messages::NotificationPriority::PRIORITY_HIGH);
 
-    androidConfig.notification(androidNotification);
+   androidConfig.notification(androidNotification);
 
     msg.android(androidConfig);
 
@@ -912,8 +918,10 @@ void notifyFCM(String melodyName, std::vector<String> TokensFCM) {
 
     if (aClient.lastError().code() == 0) {
       Serial.println("Message delivered to " + TokensFCM[i]);
+      Serial.println(payload);
     } else
       printError(aClient.lastError().code(), aClient.lastError().message());
+      Serial.println(payload);
   }
 }
 
@@ -936,6 +944,7 @@ std::vector<String> getSystemTokensFCM() {
 
   } else
     printError(aClient.lastError().code(), aClient.lastError().message());
+  Serial.println("Tokens obtained: " + String(Tokens.size()));
 
   return Tokens;
 }

@@ -212,10 +212,12 @@ void loop() {
         printError(aClient.lastError().code(), aClient.lastError().message());
     }
 
-    if (appService.ready() && app.ready() && Serial2.available()) {
+    if (Serial2.available()) {
       String Rx = Serial2.readStringUntil('%');
       String Tag = "";
       String Content = "";
+
+      Serial.println(Rx);
       // Trova l'indice della prima occorrenza di '-'
       int startIdx = Rx.indexOf('-');
 
@@ -225,6 +227,9 @@ void loop() {
       if (startIdx != -1 && endIdx != -1) {
         // Prendi la prima parte della stringa (es. "-N-")
         Tag = Rx.substring(startIdx, endIdx + 2);
+        Tag.trim();
+
+        Serial.println(Tag);
       }
 
       // Trova l'inizio della seconda parte della stringa dopo la prima parte
@@ -236,6 +241,7 @@ void loop() {
       if (secondPartEndIdx != -1 && secondPartStartIdx < secondPartEndIdx) {
         // Prendi la parte del testo tra "-N-" e "---"
         Content = Rx.substring(secondPartStartIdx, secondPartEndIdx);
+        Serial.println(Content);
       }
 
       if (Tag == "-N-") {
@@ -251,6 +257,7 @@ void loop() {
       last_time_sent = millis();
     }
 
-  } else server.handleClient();
+  } else if(WiFi.status() != WL_CONNECTED && setupCompleted) connectToWifi();
+  else server.handleClient();
 }
 //#############################################################################################################################################
