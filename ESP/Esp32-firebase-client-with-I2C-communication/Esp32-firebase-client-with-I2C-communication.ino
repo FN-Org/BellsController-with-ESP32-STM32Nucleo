@@ -252,7 +252,7 @@ void loop() {
     }
 
     // Invio CURRENT TIME
-    if (millis() - last_time_sent > SENDING_INTERVAL * 10) {
+    if (millis() - last_time_sent > SENDING_INTERVAL * 2) {
       currentTimeSending();
       last_time_sent = millis();
     }

@@ -879,7 +879,7 @@ void moveOldEvents(String payload) {
 void timeStatusCB(uint32_t& ts) {
   if (time(nullptr) < FIREBASE_DEFAULT_TS) {
 
-    configTime(3 * 3600, 0, "pool.ntp.org");
+    configTime(0, 0, "pool.ntp.org");
     while (time(nullptr) < FIREBASE_DEFAULT_TS) {
       delay(100);
     }
@@ -898,7 +898,7 @@ void notifyFCM(String melodyName, std::vector<String> TokensFCM) {
     msg.token(TokensFCM[i]);  // Registration token to send a message to
 
     // Basic notification
-    notification.body("Event with melody: " + melodyName + "is now playing").title("Event executing");
+    notification.body("Event with melody: " + melodyName + "is now playing for the system: "+ name).title("Event executing");
 
     // Priority of a message to send to Android devices.
     // https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages#androidmessagepriority
