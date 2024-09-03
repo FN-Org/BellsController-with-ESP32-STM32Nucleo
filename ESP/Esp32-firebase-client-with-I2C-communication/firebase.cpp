@@ -935,18 +935,26 @@ std::vector<String> getSystemTokensFCM() {
   std::vector<String> Tokens;
 
   if (aClient.lastError().code() == 0) {
+    Serial.println(payload);
     jsonArr.setJsonArrayData(payload);
-    for (int i = 0; i < jsonArr.size(); i++) {
+    Serial.println(jsonArr.size());
+    int i = 0;
+    while (true) {
       jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/token/stringValue");
-
+      i++;
       if (jsonData.success) {
         Tokens.push_back(jsonData.stringValue);
-      } else Serial.println("Error when obtaining token");
+        jsonData.clear();
+      } else{ 
+        Serial.println("Error when obtaining token");
+        break;
+        }
     }
 
 
   } else
     printError(aClient.lastError().code(), aClient.lastError().message());
+
   Serial.println("Tokens obtained: " + String(Tokens.size()));
 
   return Tokens;
