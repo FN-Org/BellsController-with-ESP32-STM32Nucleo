@@ -689,7 +689,7 @@ bool readProjectInformations() {
     PRIVATE_KEY = file.readStringUntil('\n');
     PRIVATE_KEY.trim();
 
-    replaceAll(PRIVATE_KEY,"\\n",'\n');
+    replaceAll(PRIVATE_KEY, "\\n", '\n');
 
     if (PRIVATE_KEY == "") {
       Serial.println("PRIVATE_KEY is empty!");
@@ -776,9 +776,10 @@ void moveOldEvents(String payload) {
 
   jsonArr.setJsonArrayData(payload);
 
-  for (int i = 0; i < jsonArr.size(); i++) {
+  int i = 0;
+  while (true) {
     jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/time/timestampValue");
-
+    i++;
     if (jsonData.success) {
       String timestamp = jsonData.stringValue;
       struct tm timeinfo;
@@ -871,6 +872,7 @@ void moveOldEvents(String payload) {
       } else Serial.println("No events to be deleted.");
     } else {
       Serial.println("Failed to get the timestamp.");
+      break;
     }
   }
   jsonArr.clear();
@@ -898,7 +900,7 @@ void notifyFCM(String melodyName, std::vector<String> TokensFCM) {
     msg.token(TokensFCM[i]);  // Registration token to send a message to
 
     // Basic notification
-    notification.body("Event with melody: " + melodyName + "is now playing for the system: "+ name).title("Event executing");
+    notification.body("Event with melody: " + melodyName + "is now playing for the system: " + name).title("Event executing");
 
     // Priority of a message to send to Android devices.
     // https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages#androidmessagepriority
@@ -911,7 +913,7 @@ void notifyFCM(String melodyName, std::vector<String> TokensFCM) {
     // https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages#NotificationPriority
     androidNotification.notification_priority(Messages::NotificationPriority::PRIORITY_HIGH);
 
-   androidConfig.notification(androidNotification);
+    androidConfig.notification(androidNotification);
 
     msg.android(androidConfig);
 
@@ -922,9 +924,12 @@ void notifyFCM(String melodyName, std::vector<String> TokensFCM) {
     if (aClient.lastError().code() == 0) {
       Serial.println("Message delivered to " + TokensFCM[i]);
       Serial.println(payload);
-    } else
+    } else {
       printError(aClient.lastError().code(), aClient.lastError().message());
-      Serial.println(payload);
+    }
+
+
+    Serial.println(payload);
   }
 }
 
@@ -945,10 +950,10 @@ std::vector<String> getSystemTokensFCM() {
       if (jsonData.success) {
         Tokens.push_back(jsonData.stringValue);
         jsonData.clear();
-      } else{ 
+      } else {
         Serial.println("Error when obtaining token");
         break;
-        }
+      }
     }
 
 

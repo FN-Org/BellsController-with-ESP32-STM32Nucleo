@@ -1166,10 +1166,13 @@ void parseTime(){
 					}
 					else {
 						uart1_rx_buffer[rx_index - 2] = '\0';
+						if (rx_index > 128) return;
+						else {
 						strcpy(jsonTime,uart1_rx_buffer);
 						memset(uart1_rx_buffer, 0, sizeof(uart1_rx_buffer));
 						rx_index = 0;
 						process_json_time(jsonTime);
+						}
 					}
 				}
 
