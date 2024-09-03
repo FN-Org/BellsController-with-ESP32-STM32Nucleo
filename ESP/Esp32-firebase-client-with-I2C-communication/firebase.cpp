@@ -688,6 +688,9 @@ bool readProjectInformations() {
 
     PRIVATE_KEY = file.readStringUntil('\n');
     PRIVATE_KEY.trim();
+
+    replaceAll(PRIVATE_KEY,"\\n",'\n');
+
     if (PRIVATE_KEY == "") {
       Serial.println("PRIVATE_KEY is empty!");
       return false;

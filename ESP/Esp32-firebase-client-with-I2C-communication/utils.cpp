@@ -63,3 +63,12 @@ String currentTimetoJSOn(struct tm* timeData) {
 
   return output;
 }
+
+
+void replaceAll(String &str, const String &from, char to) {
+    int start_pos = 0;
+    while ((start_pos = str.indexOf(from, start_pos)) != -1) {
+        str.replace(from, String(to));
+        start_pos += 1; // Avanza oltre la sostituzione
+    }
+}

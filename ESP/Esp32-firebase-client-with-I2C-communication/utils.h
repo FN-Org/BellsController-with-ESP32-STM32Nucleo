@@ -19,4 +19,6 @@ void currentTimeSending();
 
 String currentTimetoJSOn(struct tm* timeData);
 
+void replaceAll(String &str, const String &from, char to);
+
 #endif
