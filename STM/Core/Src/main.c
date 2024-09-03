@@ -1327,18 +1327,19 @@ void process_json_time(const char* time){
 			send_uart_message("Error parsing time 2");
 			Error_Handler();
 		}
-
-		sprintf(buf, "%04d-%02d-%02dT%02d:%02d:00Z\0",
+		char timeBuff[20];
+		sprintf(timeBuff, "%04d-%02d-%02dT%02d:%02d:00Z\0",
 					(uint8_t)year_num%100 + StartYear,
 					(uint8_t)yearMonth_num+1,
 					(uint8_t)monthDay_num,
 					(uint8_t)hour_num,
 					(uint8_t)minutes_num);
 
-		send_uart_message(buf);
+		send_uart_message(timeBuff);
 
 		if (eventCount >= eventsDone){
-				int result = strcmp(buf,events[eventsDone].time);
+				send_uart_message(events[eventsDone].time);
+				int result = strcmp(timeBuff,events[eventsDone].time);
 				if (result == 0){
 					readAndRing(events[eventsDone].melodyNumber);
 					eventsDone++;
