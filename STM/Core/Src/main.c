@@ -1348,6 +1348,16 @@ void process_json_time(const char* time){
 					eventsDone++;
 				}
 			}
+		HD44780_Clear();
+
+		sprintf(buf,"Date: %02d.%02d.%02d",(uint8_t)monthDay_num,(uint8_t)yearMonth_num+1,(uint8_t)year_num%100 + StartYear);
+		HD44780_SetCursor(0,0);
+		HD44780_PrintStr(buf);
+
+
+		sprintf(buf,"Time: %02d.%02d",(uint8_t)hour_num+2,(uint8_t)minutes_num);
+		HD44780_SetCursor(0,1);
+		HD44780_PrintStr(buf);
 
 	}
 
