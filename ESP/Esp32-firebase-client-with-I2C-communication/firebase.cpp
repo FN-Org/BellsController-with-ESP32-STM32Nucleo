@@ -779,7 +779,7 @@ void moveOldEvents(String payload) {
   int i = 0;
   while (true) {
     jsonArr.get(jsonData, "documents/[" + String(i) + "]/fields/time/timestampValue");
-    i++;
+    
     if (jsonData.success) {
       String timestamp = jsonData.stringValue;
       struct tm timeinfo;
@@ -870,6 +870,7 @@ void moveOldEvents(String payload) {
         }
 
       } else Serial.println("No events to be deleted.");
+      i++;
     } else {
       Serial.println("Failed to get the timestamp.");
       break;
