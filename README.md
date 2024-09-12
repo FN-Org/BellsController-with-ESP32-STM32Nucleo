@@ -45,3 +45,4 @@ Before you begin, ensure you have met the following requirements:
   -  **[STM32_HAL_I2C_HD44780](https://github.com/eziya/STM32_HAL_I2C_HD44780)**: HD44780 I2C Library for STM32, made by [eziya](https://github.com/eziya).
 
 ## Circuit diagram
+<img src="assets/circuitDesign.png" width="50%">
