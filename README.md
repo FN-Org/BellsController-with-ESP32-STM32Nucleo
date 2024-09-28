@@ -44,5 +44,25 @@ Before you begin, ensure you have met the following requirements:
   -  **[FLASH-PROGRAM](https://github.com/controllerstech/STM32/tree/master/FLASH_PROGRAM/F4%20SERIES)**: Write data in the FLASH memory of F4 Series MCU, made by [Controllerstech](https://github.com/controllerstech).
   -  **[STM32_HAL_I2C_HD44780](https://github.com/eziya/STM32_HAL_I2C_HD44780)**: HD44780 I2C Library for STM32, made by [eziya](https://github.com/eziya).
 
-## Circuit diagram
-<img src="assets/circuitDesign.png" width="50%">
+## Physical Circuit Images and circuit diagram
+
+Below are three images representing the physical implementation of the bell control circuit, simulating a real setup with 5 bells.
+
+- **Image 1**: Front view displaying date and time.
+  
+  <img src="assets/date.jpeg" width="50%">
+
+- **Image 2**: Front view displaying the system information.
+
+  <img src="assets/info.jpeg" width="50%">
+
+- **Image 3**: Side view showing the complete circuit layout.
+
+  <img src="assets/lateral.jpeg" width="50%">
+
+- **Circuit diagram**:
+  
+  <img src="assets/circuitDesign.png" width="50%">
+
+These images demonstrate the circuit in action, displaying key information on the LCD screen and giving a comprehensive view of the overall setup.
+
